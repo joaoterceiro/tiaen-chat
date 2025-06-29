@@ -42,16 +42,62 @@ export default function EvolutionPage() {
   })
 
   useEffect(() => {
+    // Inicializar o evolutionService
+    evolutionService.initialize({
+      baseUrl: process.env.NEXT_PUBLIC_EVOLUTION_API_URL || 'https://evolution.x5fx16.easypanel.host',
+      apiKey: process.env.NEXT_PUBLIC_EVOLUTION_API_KEY || '2A469B9BD3CBFE8BF18D11569196F',
+      webhook: `${window.location.origin}/api/rag/webhook`
+    })
+    
     loadInstances()
   }, [])
 
   const loadInstances = async () => {
     try {
       setLoading(true)
-      const data = await evolutionService.getInstances()
-      setInstances(data)
+      
+      // Buscar instâncias da Evolution API
+      const evolutionInstances = await evolutionService.getInstances()
+      
+      // Buscar configurações do banco
+      const response = await fetch('/api/evolution/instances')
+      const dbInstances = response.ok ? await response.json() : []
+      
+      // Combinar dados
+      const combinedInstances = evolutionInstances.map(evInstance => {
+        const dbInstance = dbInstances.find((db: any) => db.instance_name === evInstance.name)
+        return {
+          instanceName: evInstance.name,
+          status: evInstance.status === 'connected' ? 'open' : 'close',
+          aiEnabled: dbInstance?.ai_enabled ?? true,
+          autoResponse: dbInstance?.auto_response ?? true,
+          welcomeMessage: dbInstance?.welcome_message ?? 'Olá! Como posso ajudá-lo hoje?',
+          webhookUrl: evInstance.webhook
+        }
+      })
+      
+      setInstances(combinedInstances)
     } catch (error) {
       console.error('Erro ao carregar instâncias:', error)
+      // Se não conseguir conectar com Evolution API, carrega só do banco
+      try {
+        const response = await fetch('/api/evolution/instances')
+        if (response.ok) {
+          const dbInstances = await response.json()
+          const mappedInstances = dbInstances.map((db: any) => ({
+            instanceName: db.instance_name,
+            status: db.status || 'close',
+            aiEnabled: db.ai_enabled,
+            autoResponse: db.auto_response,
+            welcomeMessage: db.welcome_message,
+            webhookUrl: null
+          }))
+          setInstances(mappedInstances)
+        }
+      } catch (dbError) {
+        console.error('Erro ao carregar do banco:', dbError)
+        alert('Erro ao carregar instâncias. Verifique a conexão.')
+      }
     } finally {
       setLoading(false)
     }
@@ -59,49 +105,15 @@ export default function EvolutionPage() {
 
   const createInstance = async () => {
     try {
+      if (!newInstance.name.trim()) {
+        alert('Nome da instância é obrigatório')
+        return
+      }
+
       setLoading(true)
       
-      // Criar instância na Evolution API
-      await evolutionService.createInstance({
-        instanceName: newInstance.name,
-        token: newInstance.token,
-        qrcode: true,
-        webhook: `${window.location.origin}/api/rag/webhook`,
-        webhookByEvents: false,
-        webhookBase64: false,
-        events: [
-          'APPLICATION_STARTUP',
-          'QRCODE_UPDATED',
-          'MESSAGES_UPSERT',
-          'MESSAGES_UPDATE',
-          'MESSAGES_DELETE',
-          'SEND_MESSAGE',
-          'CONTACTS_SET',
-          'CONTACTS_UPSERT',
-          'CONTACTS_UPDATE',
-          'PRESENCE_UPDATE',
-          'CHATS_SET',
-          'CHATS_UPSERT',
-          'CHATS_UPDATE',
-          'CHATS_DELETE',
-          'GROUPS_UPSERT',
-          'GROUP_UPDATE',
-          'GROUP_PARTICIPANTS_UPDATE',
-          'CONNECTION_UPDATE',
-          'CALL',
-          'NEW_JWT_TOKEN'
-        ]
-      })
-
-      // Configurar webhook
-      await evolutionService.setWebhook(newInstance.name, {
-        url: `${window.location.origin}/api/rag/webhook`,
-        enabled: true,
-        events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE']
-      })
-
-      // Salvar configuração no banco
-      await fetch('/api/evolution/instances', {
+      // 1. Salvar configuração no banco primeiro
+      const dbResponse = await fetch('/api/evolution/instances', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,6 +124,39 @@ export default function EvolutionPage() {
         })
       })
 
+      if (!dbResponse.ok) {
+        const error = await dbResponse.json()
+        throw new Error(error.error || 'Erro ao salvar no banco')
+      }
+
+      // 2. Tentar criar instância na Evolution API
+      try {
+        await evolutionService.createInstance({
+          instanceName: newInstance.name,
+          token: newInstance.token || undefined,
+          qrcode: true,
+          webhook: `${window.location.origin}/api/rag/webhook`,
+          webhookByEvents: false,
+          webhookBase64: false,
+          events: [
+            'MESSAGES_UPSERT',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED'
+          ]
+        })
+
+        // 3. Configurar webhook
+        await evolutionService.setWebhook(newInstance.name, {
+          url: `${window.location.origin}/api/rag/webhook`,
+          enabled: true,
+          events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE']
+        })
+      } catch (evolutionError) {
+        console.warn('Erro na Evolution API, mas instância salva no banco:', evolutionError)
+        // Continua mesmo se Evolution API falhar
+      }
+
+      // 4. Fechar modal e resetar form
       setShowCreateModal(false)
       setNewInstance({
         name: '',
@@ -121,10 +166,13 @@ export default function EvolutionPage() {
         welcomeMessage: 'Olá! Como posso ajudá-lo hoje?'
       })
       
+      // 5. Recarregar lista
       await loadInstances()
+      
+      alert('Instância criada com sucesso!')
     } catch (error) {
       console.error('Erro ao criar instância:', error)
-      alert('Erro ao criar instância. Verifique os dados e tente novamente.')
+      alert(`Erro ao criar instância: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
     } finally {
       setLoading(false)
     }

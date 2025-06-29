@@ -16,6 +16,7 @@ import { DashboardStats } from '@/components/dashboard/DashboardStats'
 import { QuickActions } from '@/components/dashboard/QuickActions'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
 import { ConversationMetrics } from '@/components/dashboard/ConversationMetrics'
+import { EvolutionQuickActions } from '@/components/dashboard/EvolutionQuickActions'
 
 export default async function DashboardPage() {
   const cookieStore = await cookies()
@@ -120,7 +121,7 @@ export default async function DashboardPage() {
           <DashboardStats />
 
           {/* Main Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
             {/* Conversation Metrics */}
             <div className="lg:col-span-2">
               <ConversationMetrics />
@@ -130,10 +131,47 @@ export default async function DashboardPage() {
             <div>
               <QuickActions />
             </div>
+
+            {/* Evolution Quick Actions */}
+            <div>
+              <EvolutionQuickActions />
+            </div>
           </div>
 
           {/* Feature Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* Evolution API Card */}
+            <Card variant="elevated" className="hover:shadow-xl transition-all duration-300 group">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 text-white flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <CardTitle className="text-lg">Evolution API</CardTitle>
+                <CardDescription>
+                  Gerenciar instâncias WhatsApp e conexões
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-secondary-600">Instâncias Ativas</span>
+                    <Badge variant="success">2</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-secondary-600">Status</span>
+                    <Badge variant="success">Online</Badge>
+                  </div>
+                  <Button asChild className="w-full mt-4">
+                    <Link href="/evolution">
+                      Gerenciar Instâncias
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* RAG System Card */}
             <Card variant="elevated" className="hover:shadow-xl transition-all duration-300 group">
               <CardHeader>

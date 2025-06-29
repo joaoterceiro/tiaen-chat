@@ -25,7 +25,8 @@ import {
   Zap, 
   BarChart3, 
   Settings,
-  MessageSquare
+  MessageSquare,
+  Smartphone
 } from 'lucide-react'
 
 interface QuickAction {
@@ -74,10 +75,17 @@ export function QuickActions() {
 
   const actions: QuickAction[] = [
     {
+      title: 'Nova Instância',
+      description: 'Criar WhatsApp',
+      icon: <Smartphone className="h-4 w-4" />,
+      href: '/evolution',
+      variant: 'primary'
+    },
+    {
       title: 'Nova Conversa',
       description: 'Iniciar conversa manual',
       icon: <Plus className="h-4 w-4" />,
-      variant: 'primary',
+      variant: 'outline',
       onClick: handleCreateConversation
     },
     {
@@ -87,6 +95,13 @@ export function QuickActions() {
       href: '/conversas',
       variant: 'outline',
       badge: '12'
+    },
+    {
+      title: 'Evolution API',
+      description: 'Gerenciar instâncias',
+      icon: <Smartphone className="h-4 w-4" />,
+      href: '/evolution',
+      variant: 'outline'
     },
     {
       title: 'Sistema RAG',
