@@ -2,16 +2,37 @@
 
 import { Alert, AlertDescription, Button } from '@/components/ui'
 import { Settings, ExternalLink, Copy } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabaseDataService } from '@/services/supabase-data'
 
 interface ConfigurationAlertProps {
-  error: string
+  error?: string
+  forceShow?: boolean
 }
 
-export default function ConfigurationAlert({ error }: ConfigurationAlertProps) {
+export default function ConfigurationAlert({ error, forceShow = false }: ConfigurationAlertProps) {
   const [copied, setCopied] = useState(false)
+  const [shouldShow, setShouldShow] = useState(true)
 
-  const isSupabaseError = error.includes('Supabase') || error.includes('.env.local')
+  // Verificar se o sistema já está configurado
+  useEffect(() => {
+    const checkConfiguration = async () => {
+      try {
+        const systemConfigured = await supabaseDataService.getSystemSetting('system_configured')
+        if (systemConfigured?.value === 'true' && !forceShow) {
+          setShouldShow(false)
+        }
+      } catch (error) {
+        console.error('Erro ao verificar configuração:', error)
+      }
+    }
+    checkConfiguration()
+  }, [forceShow])
+
+  // Se não deve mostrar, retorna null
+  if (!shouldShow) return null
+
+  const isSupabaseError = error?.includes('Supabase') || error?.includes('.env.local')
 
   const copyEnvExample = async () => {
     const envExample = `# Configurações do Supabase (OBRIGATÓRIO)

@@ -341,10 +341,56 @@ export function RAGProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const checkConfigurationOld = () => {
-    const isConfigured = state.openAIConfig !== null && state.evolutionConfig !== null
-    dispatch({ type: 'SET_CONFIGURED', payload: isConfigured })
-  }
+  const checkConfiguration = useCallback(async () => {
+    try {
+      // Verificar se existe configuração no Supabase
+      const systemConfigured = await supabaseDataService.getSystemSetting('system_configured')
+      
+      if (systemConfigured?.value === 'true') {
+        // Se estiver configurado no Supabase, carregar configurações
+        await loadConfigurationsFromSupabase()
+        dispatch({ type: 'SET_CONFIGURED', payload: true })
+        return
+      }
+      
+      // Se não estiver no Supabase, verificar configurações locais
+      const hasOpenAI = state.openAIConfig?.apiKey
+      const hasEvolution = state.evolutionConfig?.baseUrl && state.evolutionConfig?.apiKey
+      const isConfigured = Boolean(hasOpenAI && hasEvolution)
+      
+      dispatch({ type: 'SET_CONFIGURED', payload: isConfigured })
+      
+      // Se estiver configurado localmente, salvar no Supabase
+      if (isConfigured) {
+        await supabaseDataService.setSystemSetting('system_configured', 'true')
+        if (state.openAIConfig) {
+          await supabaseDataService.createAIConfiguration({
+            name: 'OpenAI Configuration',
+            provider: 'openai',
+            model: state.openAIConfig.model,
+            api_key_encrypted: state.openAIConfig.apiKey,
+            temperature: state.openAIConfig.temperature,
+            max_tokens: state.openAIConfig.maxTokens,
+            system_prompt: state.openAIConfig.systemPrompt
+          })
+        }
+        if (state.evolutionConfig) {
+          await Promise.all([
+            supabaseDataService.setSystemSetting('evolution_api_url', state.evolutionConfig.baseUrl),
+            supabaseDataService.setSystemSetting('evolution_api_key', state.evolutionConfig.apiKey),
+            supabaseDataService.setSystemSetting('evolution_instance_name', state.evolutionConfig.instanceName),
+            state.evolutionConfig.webhook && supabaseDataService.setSystemSetting('evolution_webhook_url', state.evolutionConfig.webhook)
+          ])
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao verificar configuração:', error)
+      // Em caso de erro, usar configurações locais
+      const hasOpenAI = state.openAIConfig?.apiKey
+      const hasEvolution = state.evolutionConfig?.baseUrl && state.evolutionConfig?.apiKey
+      dispatch({ type: 'SET_CONFIGURED', payload: Boolean(hasOpenAI && hasEvolution) })
+    }
+  }, [state.openAIConfig, state.evolutionConfig])
 
   // Instâncias
   const createInstance = async (name: string) => {
@@ -745,13 +791,6 @@ export function RAGProvider({ children }: { children: ReactNode }) {
   }
 
   // Carregar dados iniciais
-  const checkConfiguration = useCallback(() => {
-    const hasOpenAI = state.openAIConfig?.apiKey
-    const hasEvolution = state.evolutionConfig?.baseUrl && state.evolutionConfig?.apiKey
-    const isConfigured = Boolean(hasOpenAI && hasEvolution)
-    dispatch({ type: 'SET_CONFIGURED', payload: isConfigured })
-  }, [state.openAIConfig, state.evolutionConfig])
-
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -766,63 +805,30 @@ export function RAGProvider({ children }: { children: ReactNode }) {
           })
           return
         }
+
+        // Verificar e carregar configurações
+        await checkConfiguration()
         
-        // Primeiro, verificar se o sistema já foi configurado
-        const systemConfigured = await supabaseDataService.getSystemSetting('system_configured')
-        
-        if (systemConfigured && systemConfigured.value === 'true') {
-          // Sistema já configurado, carregar configurações do Supabase
-          await loadConfigurationsFromSupabase()
-        } else {
-          // Sistema não configurado, tentar carregar do localStorage
-          const savedOpenAIConfig = localStorage.getItem('openai-config')
-          const savedEvolutionConfig = localStorage.getItem('evolution-config')
-          
-          if (savedOpenAIConfig) {
-            const config = JSON.parse(savedOpenAIConfig)
-            dispatch({ type: 'SET_OPENAI_CONFIG', payload: config })
-            openAIService.initialize(config)
-          }
-          
-          if (savedEvolutionConfig) {
-            const config = JSON.parse(savedEvolutionConfig)
-            dispatch({ type: 'SET_EVOLUTION_CONFIG', payload: config })
-            evolutionService.initialize(config)
-          }
+        // Carregar outros dados apenas se estiver configurado
+        if (state.isConfigured) {
+          await Promise.all([
+            refreshInstances(),
+            refreshConversations(),
+            loadKnowledgeBase(),
+            loadAutomationRules()
+          ])
         }
-        
-        checkConfiguration()
-        
-        // Carregar dados do Supabase
-        await Promise.all([
-          refreshInstances(),
-          refreshConversations(),
-          loadKnowledgeBase(),
-          loadAutomationRules()
-        ])
-        
       } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error)
-        let errorMessage = 'Erro ao carregar dados iniciais'
-        
-        if (error instanceof Error) {
-          if (error.message.includes('fetch')) {
-            errorMessage = '🔌 Erro de conexão com Supabase. Verifique suas credenciais no arquivo .env.local'
-          } else if (error.message.includes('Invalid API key')) {
-            errorMessage = '🔑 Chave API do Supabase inválida. Verifique NEXT_PUBLIC_SUPABASE_ANON_KEY no .env.local'
-          } else if (error.message.includes('Project not found')) {
-            errorMessage = '📂 Projeto Supabase não encontrado. Verifique NEXT_PUBLIC_SUPABASE_URL no .env.local'
-          } else {
-            errorMessage = `❌ ${error.message}`
-          }
-        }
-        
-        dispatch({ type: 'SET_ERROR', payload: errorMessage })
+        dispatch({ 
+          type: 'SET_ERROR', 
+          payload: 'Erro ao carregar configurações. Por favor, configure o sistema novamente.' 
+        })
       }
     }
 
     loadInitialData()
-  }, [])
+  }, [checkConfiguration, state.isConfigured])
 
   const loadConfigurationsFromSupabase = async () => {
     try {

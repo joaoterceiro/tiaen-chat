@@ -79,6 +79,73 @@ Diretrizes:
     return <ConfigurationAlert error={error} />
   }
 
+  // Se já estiver configurado e não estiver no modo de edição, mostrar status
+  if (isConfigured && !showConfiguration) {
+    return (
+      <div className="space-y-6">
+        <Alert variant="success">
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>
+            ✅ Sistema configurado e pronto para uso! 
+            <Button 
+              variant="link" 
+              className="p-0 h-auto ml-2"
+              onClick={() => setShowConfiguration(true)}
+            >
+              Alterar configurações
+            </Button>
+          </AlertDescription>
+        </Alert>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-green-600" />
+                OpenAI
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="text-sm text-secondary-600">
+                  <strong>Modelo:</strong> {existingOpenAIConfig?.model || 'Não configurado'}
+                </p>
+                <p className="text-sm text-secondary-600">
+                  <strong>Temperatura:</strong> {existingOpenAIConfig?.temperature || 'Não configurado'}
+                </p>
+                <p className="text-sm text-secondary-600">
+                  <strong>Status:</strong> <span className="text-green-600">✅ Conectado</span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-blue-600" />
+                Evolution API
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="text-sm text-secondary-600">
+                  <strong>Instância:</strong> {existingEvolutionConfig?.instanceName || 'Não configurado'}
+                </p>
+                <p className="text-sm text-secondary-600">
+                  <strong>URL:</strong> {existingEvolutionConfig?.baseUrl ? '✅ Configurado' : 'Não configurado'}
+                </p>
+                <p className="text-sm text-secondary-600">
+                  <strong>Status:</strong> <span className="text-green-600">✅ Conectado</span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   const handleOpenAISubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
