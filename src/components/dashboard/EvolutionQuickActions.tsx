@@ -72,15 +72,23 @@ export function EvolutionQuickActions() {
     }
   }
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'connected': return 'Online'
+      case 'connecting': return 'Conectando'
+      default: return 'Offline'
+    }
+  }
+
   return (
     <Card variant="elevated" className="hover:shadow-xl transition-all duration-300">
-      <CardHeader>
+      <CardHeader className="pb-4">
         <CardTitle className="text-lg flex items-center gap-2">
           <Smartphone className="h-5 w-5 text-green-600" />
           Evolution API
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <div className="space-y-4">
           {/* Botão principal */}
           <Button asChild className="w-full">
@@ -91,66 +99,77 @@ export function EvolutionQuickActions() {
           </Button>
 
           {/* Status das instâncias */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <h4 className="text-sm font-medium text-secondary-700">Instâncias Recentes</h4>
             {loading ? (
               <div className="flex justify-center py-4">
                 <Spinner size="sm" />
               </div>
             ) : instances.length === 0 ? (
-              <div className="text-center py-4">
-                <p className="text-sm text-secondary-600">Nenhuma instância encontrada</p>
-                <Button asChild size="sm" variant="outline" className="mt-2">
+              <div className="text-center py-4 px-3 bg-secondary-50 rounded-lg">
+                <p className="text-sm text-secondary-600 mb-2">Nenhuma instância encontrada</p>
+                <Button asChild size="sm" variant="outline">
                   <Link href="/evolution">
                     Criar Primeira Instância
                   </Link>
                 </Button>
               </div>
             ) : (
-              instances.map((instance, index) => (
-                <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-secondary-50">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(instance.status)}
-                    <span className="text-sm font-medium">{instance.name}</span>
-                    {instance.aiEnabled && (
-                      <Badge variant="info" className="text-xs">IA</Badge>
-                    )}
+              <div className="space-y-2">
+                {instances.map((instance, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-secondary-50 hover:bg-secondary-100 transition-colors">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {getStatusIcon(instance.status)}
+                      <span className="text-sm font-medium truncate">{instance.name}</span>
+                      {instance.aiEnabled && (
+                        <Badge variant="info" className="text-xs flex-shrink-0">IA</Badge>
+                      )}
+                    </div>
+                    <Badge variant={getStatusColor(instance.status)} className="text-xs flex-shrink-0">
+                      {getStatusText(instance.status)}
+                    </Badge>
                   </div>
-                  <Badge variant={getStatusColor(instance.status)} className="text-xs">
-                    {instance.status === 'connected' ? 'Online' : 'Offline'}
-                  </Badge>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
 
           {/* Ações rápidas */}
-          <div className="grid grid-cols-2 gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href="/evolution">
-                <Settings className="h-3 w-3 mr-1" />
-                Gerenciar
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/evolution">
-                <QrCode className="h-3 w-3 mr-1" />
-                QR Code
-              </Link>
-            </Button>
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-secondary-700">Ações Rápidas</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <Button asChild size="sm" variant="outline" className="h-auto p-2">
+                <Link href="/evolution">
+                  <div className="flex flex-col items-center gap-1">
+                    <Settings className="h-3 w-3" />
+                    <span className="text-xs">Gerenciar</span>
+                  </div>
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="h-auto p-2">
+                <Link href="/evolution">
+                  <div className="flex flex-col items-center gap-1">
+                    <QrCode className="h-3 w-3" />
+                    <span className="text-xs">QR Code</span>
+                  </div>
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {/* Stats rápidas */}
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-secondary-200">
-            <div className="text-center">
-              <p className="text-lg font-bold text-secondary-900">{instances.length}</p>
-              <p className="text-xs text-secondary-600">Instâncias</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-green-600">
-                {instances.filter(i => i.status === 'connected').length}
-              </p>
-              <p className="text-xs text-secondary-600">Conectadas</p>
+          <div className="border-t border-secondary-200 pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-secondary-900">{instances.length}</p>
+                <p className="text-xs text-secondary-600">Instâncias</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-green-600">
+                  {instances.filter(i => i.status === 'connected').length}
+                </p>
+                <p className="text-xs text-secondary-600">Conectadas</p>
+              </div>
             </div>
           </div>
         </div>

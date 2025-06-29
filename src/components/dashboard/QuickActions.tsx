@@ -37,6 +37,7 @@ interface QuickAction {
   onClick?: () => void
   variant: 'primary' | 'outline'
   badge?: string
+  priority?: boolean
 }
 
 export function QuickActions() {
@@ -79,29 +80,33 @@ export function QuickActions() {
       description: 'Criar WhatsApp',
       icon: <Smartphone className="h-4 w-4" />,
       href: '/evolution',
-      variant: 'primary'
+      variant: 'primary',
+      priority: true
     },
     {
       title: 'Nova Conversa',
-      description: 'Iniciar conversa manual',
+      description: 'Iniciar manual',
       icon: <Plus className="h-4 w-4" />,
       variant: 'outline',
-      onClick: handleCreateConversation
+      onClick: handleCreateConversation,
+      priority: true
     },
     {
       title: 'Chat WhatsApp',
-      description: 'Ver conversas ativas',
+      description: 'Ver conversas',
       icon: <MessageSquare className="h-4 w-4" />,
       href: '/conversas',
       variant: 'outline',
-      badge: '12'
+      badge: '12',
+      priority: true
     },
     {
       title: 'Evolution API',
-      description: 'Gerenciar instâncias',
+      description: 'Gerenciar',
       icon: <Smartphone className="h-4 w-4" />,
       href: '/evolution',
-      variant: 'outline'
+      variant: 'outline',
+      priority: true
     },
     {
       title: 'Sistema RAG',
@@ -113,7 +118,7 @@ export function QuickActions() {
     },
     {
       title: 'Contatos',
-      description: 'Gerenciar contatos',
+      description: 'Gerenciar',
       icon: <Users className="h-4 w-4" />,
       href: '/contacts',
       variant: 'outline'
@@ -127,19 +132,22 @@ export function QuickActions() {
     },
     {
       title: 'Relatórios',
-      description: 'Ver analytics',
+      description: 'Analytics',
       icon: <BarChart3 className="h-4 w-4" />,
       href: '/analytics',
       variant: 'outline'
     },
     {
       title: 'Configurações',
-      description: 'Ajustar sistema',
+      description: 'Ajustar',
       icon: <Settings className="h-4 w-4" />,
       href: '/rag?tab=configuration',
       variant: 'outline'
     }
   ]
+
+  const priorityActions = actions.filter(action => action.priority)
+  const secondaryActions = actions.filter(action => !action.priority)
 
   const handleAction = (action: QuickAction) => {
     if (action.onClick) {
@@ -150,84 +158,140 @@ export function QuickActions() {
   return (
     <>
       <Card variant="elevated" className="hover:shadow-xl transition-all duration-300">
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle className="text-lg flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary-600" />
             Ações Rápidas
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            {actions.map((action, index) => (
-              <div key={index}>
-                {action.href ? (
-                  <Button asChild variant={action.variant as any} className="w-full justify-start h-auto p-3">
-                    <Link href={action.href}>
+        <CardContent className="pt-0">
+          {/* Ações Prioritárias */}
+          <div className="space-y-3 mb-6">
+            <h4 className="text-sm font-medium text-secondary-700">Principais</h4>
+            <div className="grid grid-cols-1 gap-2">
+              {priorityActions.map((action, index) => (
+                <div key={index}>
+                  {action.href ? (
+                    <Button asChild variant={action.variant as any} className="w-full justify-start h-auto p-3">
+                      <Link href={action.href}>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className="p-2 rounded-lg bg-secondary-100 flex-shrink-0">
+                            {action.icon}
+                          </div>
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm truncate">{action.title}</p>
+                              {action.badge && (
+                                <Badge variant="primary" className="text-xs flex-shrink-0">
+                                  {action.badge}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-secondary-600 mt-0.5 truncate">
+                              {action.description}
+                            </p>
+                          </div>
+                        </div>
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={action.variant as any}
+                      className="w-full justify-start h-auto p-3"
+                      onClick={() => handleAction(action)}
+                      disabled={action.title === 'Nova Conversa' && isCreatingConversation}
+                    >
                       <div className="flex items-center gap-3 w-full">
-                        <div className="p-2 rounded-lg bg-secondary-100">
+                        <div className="p-2 rounded-lg bg-secondary-100 flex-shrink-0">
                           {action.icon}
                         </div>
-                        <div className="flex-1 text-left">
+                        <div className="flex-1 text-left min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">{action.title}</p>
+                            <p className="font-medium text-sm truncate">{action.title}</p>
                             {action.badge && (
-                              <Badge variant="primary" className="text-xs">
+                              <Badge variant="primary" className="text-xs flex-shrink-0">
                                 {action.badge}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-secondary-600 mt-1">
+                          <p className="text-xs text-secondary-600 mt-0.5 truncate">
                             {action.description}
                           </p>
                         </div>
                       </div>
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button
-                    variant={action.variant as any}
-                    className="w-full justify-start h-auto p-3"
-                    onClick={() => handleAction(action)}
-                    disabled={action.title === 'Nova Conversa' && isCreatingConversation}
-                  >
-                    <div className="flex items-center gap-3 w-full">
-                      <div className="p-2 rounded-lg bg-secondary-100">
-                        {action.icon}
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm">{action.title}</p>
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ações Secundárias */}
+          <div className="space-y-3 mb-6">
+            <h4 className="text-sm font-medium text-secondary-700">Outras Ações</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {secondaryActions.map((action, index) => (
+                <div key={index}>
+                  {action.href ? (
+                    <Button asChild variant="outline" size="sm" className="w-full justify-start h-auto p-2">
+                      <Link href={action.href}>
+                        <div className="flex items-center gap-2 w-full">
+                          <div className="p-1 rounded bg-secondary-100 flex-shrink-0">
+                            {action.icon}
+                          </div>
+                          <div className="flex-1 text-left min-w-0">
+                            <p className="font-medium text-xs truncate">{action.title}</p>
+                            {action.badge && (
+                              <Badge variant="primary" className="text-xs mt-0.5">
+                                {action.badge}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start h-auto p-2"
+                      onClick={() => handleAction(action)}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <div className="p-1 rounded bg-secondary-100 flex-shrink-0">
+                          {action.icon}
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                          <p className="font-medium text-xs truncate">{action.title}</p>
                           {action.badge && (
-                            <Badge variant="primary" className="text-xs">
+                            <Badge variant="primary" className="text-xs mt-0.5">
                               {action.badge}
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-secondary-600 mt-1">
-                          {action.description}
-                        </p>
                       </div>
-                    </div>
-                  </Button>
-                )}
-              </div>
-            ))}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Status Indicators */}
           <div className="border-t border-secondary-200 pt-4">
-            <div className="space-y-3">
+            <h4 className="text-sm font-medium text-secondary-700 mb-3">Status</h4>
+            <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-secondary-600">Status do Sistema</span>
-                <Badge variant="success">Online</Badge>
+                <span className="text-secondary-600">Sistema</span>
+                <Badge variant="success" className="text-xs">Online</Badge>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-secondary-600">WhatsApp</span>
-                <Badge variant="success">Conectado</Badge>
+                <Badge variant="success" className="text-xs">Conectado</Badge>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-secondary-600">IA Assistant</span>
-                <Badge variant="success">Ativo</Badge>
+                <Badge variant="success" className="text-xs">Ativo</Badge>
               </div>
             </div>
           </div>
@@ -248,7 +312,7 @@ export function QuickActions() {
           </ModalHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-1">
                   Telefone *
