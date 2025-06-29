@@ -1,0 +1,47 @@
+name: tiaen-chat
+services:
+  - type: app
+    data:
+      projectName: tiaen-chat
+      serviceName: web
+      source:
+        type: github
+        owner: seu-usuario
+        repo: tiaen-chat
+        branch: main
+      build:
+        type: nixpacks
+        buildCommand: npm install && npm run build
+        startCommand: npm start
+      deploy:
+        type: static
+        buildPath: .next
+      domains:
+        - host: tiaen-chat.easypanel.host
+      env:
+        - name: NODE_ENV
+          value: production
+        - name: NEXT_PUBLIC_SUPABASE_URL
+          value: ${NEXT_PUBLIC_SUPABASE_URL}
+        - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+          value: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        - name: NEXT_PUBLIC_EVOLUTION_API_URL
+          value: ${NEXT_PUBLIC_EVOLUTION_API_URL}
+        - name: NEXT_PUBLIC_EVOLUTION_API_KEY
+          value: ${NEXT_PUBLIC_EVOLUTION_API_KEY}
+        - name: NEXT_PUBLIC_EVOLUTION_WEBHOOK_URL
+          value: ${NEXT_PUBLIC_EVOLUTION_WEBHOOK_URL}
+        - name: OPENAI_API_KEY
+          value: ${OPENAI_API_KEY}
+        - name: NEXTAUTH_SECRET
+          value: ${NEXTAUTH_SECRET}
+        - name: NEXTAUTH_URL
+          value: ${NEXTAUTH_URL}
+      ports:
+        - published: 80
+          target: 3000
+      resources:
+        memoryLimit: 512
+        memoryReservation: 256
+        cpuLimit: 0.5
+        cpuReservation: 0.25 
