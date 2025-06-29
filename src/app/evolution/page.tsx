@@ -204,18 +204,39 @@ export default function EvolutionPage() {
   const connectInstance = async (instanceName: string) => {
     try {
       setQrLoading(true)
+      console.log('Iniciando conexão da instância:', instanceName)
+      
+      // 1. Verificar se a Evolution API está inicializada
+      if (!evolutionService.isInitialized()) {
+        console.log('Inicializando Evolution API...')
+        evolutionService.initialize({
+          baseUrl: process.env.NEXT_PUBLIC_EVOLUTION_API_URL || 'https://evolution.x5fx16.easypanel.host',
+          apiKey: process.env.NEXT_PUBLIC_EVOLUTION_API_KEY || '2A469B9BD3CBFE8BF18D11569196F',
+          webhook: `${window.location.origin}/api/rag/webhook`
+        })
+      }
+      
+      // 2. Tentar conectar e gerar QR Code
+      console.log('Gerando QR Code...')
       const response = await evolutionService.connectInstance(instanceName)
       
+      console.log('Resposta da conexão:', response)
+      
       if (response.qrcode) {
+        console.log('QR Code gerado com sucesso')
         setQrCode(response.qrcode)
         setSelectedInstance(instances.find(i => i.instanceName === instanceName) || null)
         setShowConfigModal(true)
+      } else {
+        console.warn('QR Code não retornado pela API')
+        alert('Erro: QR Code não gerado. Verifique os logs para mais detalhes.')
       }
       
+      // 3. Atualizar lista de instâncias
       await loadInstances()
     } catch (error) {
-      console.error('Erro ao conectar instância:', error)
-      alert('Erro ao gerar QR Code. Verifique se a Evolution API está funcionando.')
+      console.error('Erro detalhado ao conectar instância:', error)
+      alert('Erro ao gerar QR Code. Verifique se a Evolution API está funcionando e acessível.')
     } finally {
       setQrLoading(false)
     }

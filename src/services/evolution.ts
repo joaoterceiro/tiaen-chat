@@ -61,9 +61,22 @@ class EvolutionService {
 
     try {
       const response = await this.client.get(`/instance/connect/${instanceName}`)
-      return {
-        qrcode: response.data.qrcode?.code || response.data.qrcode
+
+      // Log para debug
+      console.log('Evolution API connect response:', response.data)
+
+      // Tenta diferentes formatos possíveis da resposta
+      const qrcode = response.data.qrcode?.code || // Formato 1
+        response.data.qrcode || // Formato 2
+        response.data.code || // Formato 3
+        response.data.data?.qrcode || // Formato 4
+        response.data.data?.code // Formato 5
+
+      if (!qrcode) {
+        console.warn('QR Code não encontrado na resposta:', response.data)
       }
+
+      return { qrcode }
     } catch (error) {
       console.error('Erro ao conectar instância:', error)
       throw new Error('Falha ao conectar instância')
@@ -393,6 +406,35 @@ class EvolutionService {
       console.error('Erro ao processar webhook:', error)
       return null
     }
+  }
+
+  async getMessages(instanceName: string, chatId: string): Promise<any[]> {
+    if (!this.client) {
+      throw new Error('Evolution service not initialized')
+    }
+
+    try {
+      const response = await this.client.get(`/message/fetch/${instanceName}`, {
+        params: {
+          chatId,
+          limit: 50, // Limite de mensagens para buscar
+          order: 'desc' // Mais recentes primeiro
+        }
+      })
+
+      // Log para debug
+      console.log('Evolution API messages response:', response.data)
+
+      // Retorna array de mensagens ou array vazio se não encontrar
+      return response.data.messages || response.data.data || []
+    } catch (error) {
+      console.error('Erro ao buscar mensagens:', error)
+      throw new Error('Falha ao buscar mensagens')
+    }
+  }
+
+  isInitialized(): boolean {
+    return !!this.client && !!this.config;
   }
 }
 
