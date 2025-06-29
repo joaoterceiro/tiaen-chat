@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { 
   Button, 
@@ -26,12 +26,29 @@ import {
   MessageSquare,
   Clock,
   Users,
-  ArrowLeft
+  ArrowLeft,
+  RefreshCw
 } from 'lucide-react'
 import { supabaseDataService } from '@/services/supabase-data'
 import { Database } from '@/types/database'
 import { format, subDays, startOfDay, endOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+
+// Recharts imports
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts'
 
 type DailyMetric = Database['public']['Tables']['daily_metrics']['Row']
 
@@ -47,22 +64,20 @@ interface AnalyticsData {
 
 const PERIOD_OPTIONS = [
   { value: '7', label: 'Últimos 7 dias' },
-  { value: '14', label: 'Últimos 14 dias' },
+  { value: '15', label: 'Últimos 15 dias' },
   { value: '30', label: 'Últimos 30 dias' },
   { value: '90', label: 'Últimos 90 dias' }
 ]
 
+const COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B']
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
-  const [period, setPeriod] = useState('7')
+  const [period, setPeriod] = useState('30')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadAnalyticsData()
-  }, [period])
-
-  const loadAnalyticsData = async () => {
+  const loadAnalyticsData = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
@@ -90,14 +105,14 @@ export default function AnalyticsPage() {
 
       const responseTimeByDay = metrics.map(m => ({
         date: format(new Date(m.date), 'dd/MM', { locale: ptBR }),
-        avgTime: m.avg_response_time_minutes
+        avgTime: m.average_response_time_seconds / 60 // Convert to minutes
       }))
 
       // Calcular totais
       const totalConversations = metrics.reduce((sum, m) => sum + m.total_conversations, 0)
       const totalMessages = metrics.reduce((sum, m) => sum + m.total_messages, 0)
-      const avgResponseTime = metrics.reduce((sum, m) => sum + m.avg_response_time_minutes, 0) / metrics.length || 0
-      const satisfactionRate = metrics.reduce((sum, m) => sum + (m.satisfaction_rate || 0), 0) / metrics.length || 0
+      const avgResponseTime = metrics.reduce((sum, m) => sum + (m.average_response_time_seconds / 60), 0) / metrics.length || 0
+      const satisfactionRate = metrics.reduce((sum, m) => sum + (m.customer_satisfaction || 0), 0) / metrics.length || 0
 
       setData({
         totalConversations,
@@ -114,7 +129,11 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [period])
+
+  useEffect(() => {
+    loadAnalyticsData()
+  }, [loadAnalyticsData])
 
   const exportToCsv = () => {
     if (!data) return

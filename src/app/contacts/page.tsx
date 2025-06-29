@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { 
   Button, 
@@ -64,25 +64,7 @@ export default function ContactsPage() {
     loadContacts()
   }, [])
 
-  useEffect(() => {
-    filterContacts()
-  }, [contacts, searchQuery])
-
-  const loadContacts = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      const data = await supabaseDataService.getContacts()
-      setContacts(data)
-    } catch (err) {
-      console.error('Erro ao carregar contatos:', err)
-      setError('Erro ao carregar contatos')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const filterContacts = () => {
+  const filterContacts = useCallback(() => {
     if (!searchQuery.trim()) {
       setFilteredContacts(contacts)
       return
@@ -96,6 +78,24 @@ export default function ContactsPage() {
       contact.tags?.some(tag => tag.toLowerCase().includes(query))
     )
     setFilteredContacts(filtered)
+  }, [contacts, searchQuery])
+
+  useEffect(() => {
+    filterContacts()
+  }, [filterContacts])
+
+  const loadContacts = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const data = await supabaseDataService.getContacts()
+      setContacts(data)
+    } catch (err) {
+      console.error('Erro ao carregar contatos:', err)
+      setError('Erro ao carregar contatos')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCreateContact = () => {

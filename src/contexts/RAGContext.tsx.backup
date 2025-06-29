@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react'
 import { 
   Conversation, 
   Contact, 
@@ -341,7 +341,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const checkConfigurationOld = () => {
+  const checkConfiguration = () => {
     const isConfigured = state.openAIConfig !== null && state.evolutionConfig !== null
     dispatch({ type: 'SET_CONFIGURED', payload: isConfigured })
   }
