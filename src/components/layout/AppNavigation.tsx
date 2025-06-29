@@ -20,7 +20,8 @@ import {
   Zap,
   Palette,
   LogOut,
-  Bell
+  Bell,
+  Smartphone
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +57,12 @@ export function AppNavigation({ user }: AppNavigationProps) {
       icon: <MessageSquare className="h-5 w-5" />,
       badge: '12',
       description: 'Chat WhatsApp e mensagens'
+    },
+    {
+      name: 'Evolution API',
+      href: '/evolution',
+      icon: <Smartphone className="h-5 w-5" />,
+      description: 'Gerenciar instâncias WhatsApp'
     },
     {
       name: 'Sistema RAG',

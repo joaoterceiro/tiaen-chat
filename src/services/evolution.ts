@@ -17,29 +17,56 @@ class EvolutionService {
   }
 
   // Gerenciamento de Instâncias
-  async createInstance(instanceName: string): Promise<EvolutionInstance> {
+  async createInstance(config: {
+    instanceName: string
+    token?: string
+    qrcode?: boolean
+    webhook?: string
+    webhookByEvents?: boolean
+    webhookBase64?: boolean
+    events?: string[]
+  }): Promise<EvolutionInstance> {
     if (!this.client) {
       throw new Error('Evolution service not initialized')
     }
 
     try {
       const response = await this.client.post('/instance/create', {
-        instanceName,
-        token: this.config?.apiKey,
-        qrcode: true,
-        webhook: this.config?.webhook
+        instanceName: config.instanceName,
+        token: config.token || this.config?.apiKey,
+        qrcode: config.qrcode ?? true,
+        webhook: config.webhook || this.config?.webhook,
+        webhookByEvents: config.webhookByEvents ?? false,
+        webhookBase64: config.webhookBase64 ?? false,
+        events: config.events || ['MESSAGES_UPSERT', 'CONNECTION_UPDATE']
       })
 
       return {
         id: response.data.instance.instanceName,
         name: response.data.instance.instanceName,
         status: 'disconnected',
-        webhook: this.config?.webhook,
+        webhook: config.webhook || this.config?.webhook,
         createdAt: new Date(),
       }
     } catch (error) {
       console.error('Erro ao criar instância:', error)
       throw new Error('Falha ao criar instância Evolution')
+    }
+  }
+
+  async connectInstance(instanceName: string): Promise<{ qrcode?: string }> {
+    if (!this.client) {
+      throw new Error('Evolution service not initialized')
+    }
+
+    try {
+      const response = await this.client.get(`/instance/connect/${instanceName}`)
+      return {
+        qrcode: response.data.qrcode?.code || response.data.qrcode
+      }
+    } catch (error) {
+      console.error('Erro ao conectar instância:', error)
+      throw new Error('Falha ao conectar instância')
     }
   }
 
@@ -252,16 +279,20 @@ class EvolutionService {
   }
 
   // Webhook Management
-  async setWebhook(instanceName: string, webhookUrl: string): Promise<void> {
+  async setWebhook(instanceName: string, config: {
+    url: string
+    enabled?: boolean
+    events?: string[]
+  }): Promise<void> {
     if (!this.client) {
       throw new Error('Evolution service not initialized')
     }
 
     try {
       await this.client.post(`/webhook/set/${instanceName}`, {
-        url: webhookUrl,
-        enabled: true,
-        events: [
+        url: config.url,
+        enabled: config.enabled ?? true,
+        events: config.events || [
           'MESSAGES_UPSERT',
           'MESSAGES_UPDATE',
           'MESSAGES_DELETE',
