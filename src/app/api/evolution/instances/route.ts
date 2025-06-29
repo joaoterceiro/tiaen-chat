@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase'
 export async function GET() {
   try {
     const supabase = createClient()
-    
+
     const { data: instances, error } = await supabase
       .from('evolution_instances')
       .select('*')
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createClient()
-    
+
     const { data, error } = await supabase
       .from('evolution_instances')
       .insert({
@@ -68,7 +68,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const supabase = createClient()
-    
+
     // Mapear campos do frontend para o banco
     const dbUpdates: any = {}
     if (updates.aiEnabled !== undefined) dbUpdates.ai_enabled = updates.aiEnabled
@@ -89,6 +89,34 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json(data)
+  } catch (error) {
+    console.error('Erro na API:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { instanceName } = body
+
+    if (!instanceName) {
+      return NextResponse.json({ error: 'Nome da instância é obrigatório' }, { status: 400 })
+    }
+
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('evolution_instances')
+      .delete()
+      .eq('instance_name', instanceName)
+
+    if (error) {
+      console.error('Erro ao excluir instância:', error)
+      return NextResponse.json({ error: 'Erro ao excluir instância' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Instância excluída com sucesso' })
   } catch (error) {
     console.error('Erro na API:', error)
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })

@@ -11,8 +11,9 @@ import { Alert } from '@/components/ui/Alert'
 import { Spinner } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
+import { Textarea } from '@/components/ui/Textarea'
 import { evolutionService } from '@/services/evolution'
-import { Smartphone, Plus, Settings, Zap, Wifi, WifiOff, Trash2, QrCode } from 'lucide-react'
+import { Smartphone, Plus, Settings, Zap, Wifi, WifiOff, Trash2, QrCode, RefreshCw, Copy, CheckCircle, AlertCircle, Info } from 'lucide-react'
 
 interface Instance {
   instanceName: string
@@ -24,6 +25,9 @@ interface Instance {
   aiEnabled?: boolean
   autoResponse?: boolean
   welcomeMessage?: string
+  phone?: string
+  profilePictureUrl?: string
+  lastConnection?: string
 }
 
 export default function EvolutionPage() {
@@ -33,6 +37,9 @@ export default function EvolutionPage() {
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [selectedInstance, setSelectedInstance] = useState<Instance | null>(null)
   const [qrCode, setQrCode] = useState<string>('')
+  const [qrLoading, setQrLoading] = useState(false)
+  const [configLoading, setConfigLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [newInstance, setNewInstance] = useState({
     name: '',
     token: '',
@@ -72,7 +79,10 @@ export default function EvolutionPage() {
           aiEnabled: dbInstance?.ai_enabled ?? true,
           autoResponse: dbInstance?.auto_response ?? true,
           welcomeMessage: dbInstance?.welcome_message ?? 'Olá! Como posso ajudá-lo hoje?',
-          webhookUrl: evInstance.webhook
+          webhookUrl: evInstance.webhook,
+          phone: evInstance.phone,
+          profilePictureUrl: dbInstance?.profile_picture_url,
+          lastConnection: dbInstance?.last_connection
         }
       })
       
@@ -90,7 +100,10 @@ export default function EvolutionPage() {
             aiEnabled: db.ai_enabled,
             autoResponse: db.auto_response,
             welcomeMessage: db.welcome_message,
-            webhookUrl: null
+            webhookUrl: null,
+            phone: db.phone,
+            profilePictureUrl: db.profile_picture_url,
+            lastConnection: db.last_connection
           }))
           setInstances(mappedInstances)
         }
@@ -105,8 +118,19 @@ export default function EvolutionPage() {
 
   const createInstance = async () => {
     try {
+      // Validações
       if (!newInstance.name.trim()) {
         alert('Nome da instância é obrigatório')
+        return
+      }
+
+      if (!/^[a-zA-Z0-9_-]+$/.test(newInstance.name)) {
+        alert('Nome da instância deve conter apenas letras, números, hífen e underscore')
+        return
+      }
+
+      if (instances.some(i => i.instanceName === newInstance.name)) {
+        alert('Já existe uma instância com este nome')
         return
       }
 
@@ -153,7 +177,6 @@ export default function EvolutionPage() {
         })
       } catch (evolutionError) {
         console.warn('Erro na Evolution API, mas instância salva no banco:', evolutionError)
-        // Continua mesmo se Evolution API falhar
       }
 
       // 4. Fechar modal e resetar form
@@ -180,7 +203,7 @@ export default function EvolutionPage() {
 
   const connectInstance = async (instanceName: string) => {
     try {
-      setLoading(true)
+      setQrLoading(true)
       const response = await evolutionService.connectInstance(instanceName)
       
       if (response.qrcode) {
@@ -192,8 +215,27 @@ export default function EvolutionPage() {
       await loadInstances()
     } catch (error) {
       console.error('Erro ao conectar instância:', error)
+      alert('Erro ao gerar QR Code. Verifique se a Evolution API está funcionando.')
     } finally {
-      setLoading(false)
+      setQrLoading(false)
+    }
+  }
+
+  const refreshQrCode = async () => {
+    if (!selectedInstance) return
+    
+    try {
+      setQrLoading(true)
+      const response = await evolutionService.connectInstance(selectedInstance.instanceName)
+      
+      if (response.qrcode) {
+        setQrCode(response.qrcode)
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar QR Code:', error)
+      alert('Erro ao atualizar QR Code')
+    } finally {
+      setQrLoading(false)
     }
   }
 
@@ -202,10 +244,26 @@ export default function EvolutionPage() {
 
     try {
       setLoading(true)
-      await evolutionService.deleteInstance(instanceName)
+      
+      // Excluir da Evolution API
+      try {
+        await evolutionService.deleteInstance(instanceName)
+      } catch (evolutionError) {
+        console.warn('Erro ao excluir da Evolution API:', evolutionError)
+      }
+      
+      // Excluir do banco
+      await fetch('/api/evolution/instances', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instanceName })
+      })
+      
       await loadInstances()
+      alert('Instância excluída com sucesso!')
     } catch (error) {
       console.error('Erro ao excluir instância:', error)
+      alert('Erro ao excluir instância')
     } finally {
       setLoading(false)
     }
@@ -213,7 +271,9 @@ export default function EvolutionPage() {
 
   const updateInstanceConfig = async (instanceName: string, config: any) => {
     try {
-      await fetch('/api/evolution/instances', {
+      setConfigLoading(true)
+      
+      const response = await fetch('/api/evolution/instances', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,11 +281,28 @@ export default function EvolutionPage() {
           ...config
         })
       })
+
+      if (!response.ok) {
+        throw new Error('Erro ao atualizar configuração')
+      }
+      
+      // Atualizar instância local
+      setSelectedInstance(prev => prev ? { ...prev, ...config } : null)
       
       await loadInstances()
     } catch (error) {
       console.error('Erro ao atualizar configuração:', error)
+      alert('Erro ao atualizar configuração')
+    } finally {
+      setConfigLoading(false)
     }
+  }
+
+  const copyWebhookUrl = () => {
+    const webhookUrl = `${window.location.origin}/api/rag/webhook`
+    navigator.clipboard.writeText(webhookUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const getStatusColor = (status: string) => {
@@ -244,6 +321,22 @@ export default function EvolutionPage() {
     }
   }
 
+  const formatLastConnection = (dateString?: string) => {
+    if (!dateString) return 'Nunca conectado'
+    
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+    
+    if (diffMins < 1) return 'Agora mesmo'
+    if (diffMins < 60) return `${diffMins} min atrás`
+    if (diffHours < 24) return `${diffHours}h atrás`
+    return `${diffDays} dias atrás`
+  }
+
   return (
     <PageContainer
       title="Evolution API"
@@ -257,13 +350,23 @@ export default function EvolutionPage() {
             <h2 className="text-xl font-semibold">Instâncias WhatsApp</h2>
           </div>
           
-          <Button 
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Instância
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline"
+              onClick={loadInstances}
+              disabled={loading}
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            
+            <Button 
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Nova Instância
+            </Button>
+          </div>
         </div>
 
         {/* Alert de configuração */}
@@ -312,7 +415,12 @@ export default function EvolutionPage() {
                           <WifiOff className="w-5 h-5 text-red-600" />
                         )}
                         <div>
-                          <h3 className="font-medium">{instance.instanceName}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium">{instance.instanceName}</h3>
+                            {instance.phone && (
+                              <span className="text-sm text-gray-500">({instance.phone})</span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge variant={getStatusColor(instance.status)}>
                               {getStatusText(instance.status)}
@@ -323,7 +431,13 @@ export default function EvolutionPage() {
                                 IA Ativa
                               </Badge>
                             )}
+                            {instance.autoResponse && (
+                              <Badge variant="secondary">Auto Resposta</Badge>
+                            )}
                           </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatLastConnection(instance.lastConnection)}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -334,9 +448,16 @@ export default function EvolutionPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => connectInstance(instance.instanceName)}
+                          disabled={qrLoading}
                         >
-                          <QrCode className="w-4 h-4 mr-2" />
-                          Conectar
+                          {qrLoading ? (
+                            <Spinner size="sm" />
+                          ) : (
+                            <>
+                              <QrCode className="w-4 h-4 mr-2" />
+                              Conectar
+                            </>
+                          )}
                         </Button>
                       )}
                       
@@ -375,15 +496,32 @@ export default function EvolutionPage() {
         title="Nova Instância WhatsApp"
       >
         <div className="space-y-4">
+          <Alert type="info">
+            <Info className="w-4 h-4" />
+            <div>
+              <p className="text-sm">
+                Crie uma nova instância para conectar um número do WhatsApp. 
+                Cada instância pode ter configurações independentes de IA e automação.
+              </p>
+            </div>
+          </Alert>
+
           <div>
             <label className="block text-sm font-medium mb-2">
-              Nome da Instância
+              Nome da Instância *
             </label>
             <Input
               value={newInstance.name}
               onChange={(e) => setNewInstance(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Ex: atendimento, vendas, suporte"
+              className={instances.some(i => i.instanceName === newInstance.name) ? 'border-red-500' : ''}
             />
+            {instances.some(i => i.instanceName === newInstance.name) && (
+              <p className="text-sm text-red-600 mt-1">Este nome já está em uso</p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Apenas letras, números, hífen e underscore
+            </p>
           </div>
 
           <div>
@@ -393,13 +531,19 @@ export default function EvolutionPage() {
             <Input
               value={newInstance.token}
               onChange={(e) => setNewInstance(prev => ({ ...prev, token: e.target.value }))}
-              placeholder="Token personalizado"
+              placeholder="Token personalizado para esta instância"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Deixe vazio para gerar automaticamente
+            </p>
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Ativar IA</label>
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div>
+                <label className="text-sm font-medium">Ativar IA</label>
+                <p className="text-xs text-gray-500">Respostas automáticas com inteligência artificial</p>
+              </div>
               <Switch
                 checked={newInstance.aiEnabled}
                 onCheckedChange={(checked) => 
@@ -408,8 +552,11 @@ export default function EvolutionPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Resposta Automática</label>
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div>
+                <label className="text-sm font-medium">Resposta Automática</label>
+                <p className="text-xs text-gray-500">Responder automaticamente às mensagens</p>
+              </div>
               <Switch
                 checked={newInstance.autoResponse}
                 onCheckedChange={(checked) => 
@@ -423,10 +570,11 @@ export default function EvolutionPage() {
             <label className="block text-sm font-medium mb-2">
               Mensagem de Boas-vindas
             </label>
-            <Input
+            <Textarea
               value={newInstance.welcomeMessage}
               onChange={(e) => setNewInstance(prev => ({ ...prev, welcomeMessage: e.target.value }))}
-              placeholder="Mensagem enviada no primeiro contato"
+              placeholder="Mensagem enviada no primeiro contato com o cliente"
+              rows={3}
             />
           </div>
 
@@ -439,7 +587,7 @@ export default function EvolutionPage() {
             </Button>
             <Button
               onClick={createInstance}
-              disabled={!newInstance.name || loading}
+              disabled={!newInstance.name || loading || instances.some(i => i.instanceName === newInstance.name)}
             >
               {loading ? <Spinner size="sm" /> : 'Criar Instância'}
             </Button>
@@ -459,75 +607,188 @@ export default function EvolutionPage() {
         size="lg"
       >
         {selectedInstance && (
-          <Tabs defaultValue="connection">
-            <div className="space-y-6">
-              {/* QR Code */}
-              {qrCode && (
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-medium mb-2">Escaneie o QR Code</h3>
-                  <img 
-                    src={qrCode} 
-                    alt="QR Code" 
-                    className="mx-auto max-w-xs"
-                  />
-                  <p className="text-sm text-gray-600 mt-2">
-                    Use o WhatsApp para escanear este código
-                  </p>
-                </div>
-              )}
-
-              {/* Configurações da IA */}
-              <div className="space-y-4">
-                <h3 className="font-medium">Configurações da IA</h3>
-                
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Ativar IA</label>
-                  <Switch
-                    checked={selectedInstance.aiEnabled}
-                    onCheckedChange={(checked) => 
-                      updateInstanceConfig(selectedInstance.instanceName, { aiEnabled: checked })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Resposta Automática</label>
-                  <Switch
-                    checked={selectedInstance.autoResponse}
-                    onCheckedChange={(checked) => 
-                      updateInstanceConfig(selectedInstance.instanceName, { autoResponse: checked })
-                    }
-                  />
-                </div>
-
+          <div className="space-y-6">
+            {/* Status da instância */}
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="font-medium mb-3">Status da Instância</h3>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Mensagem de Boas-vindas
-                  </label>
-                  <Input
-                    value={selectedInstance.welcomeMessage || ''}
-                    onChange={(e) => 
-                      updateInstanceConfig(selectedInstance.instanceName, { welcomeMessage: e.target.value })
-                    }
-                    placeholder="Mensagem enviada no primeiro contato"
-                  />
-                </div>
-              </div>
-
-              {/* Status da conexão */}
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium mb-2">Status da Conexão</h3>
-                <div className="flex items-center gap-2">
-                  <Badge variant={getStatusColor(selectedInstance.status)}>
+                  <p className="text-sm text-gray-600">Status</p>
+                  <Badge variant={getStatusColor(selectedInstance.status)} className="mt-1">
                     {getStatusText(selectedInstance.status)}
                   </Badge>
-                  {selectedInstance.webhookUrl && (
-                    <Badge variant="success">Webhook Configurado</Badge>
-                  )}
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Última Conexão</p>
+                  <p className="text-sm font-medium mt-1">
+                    {formatLastConnection(selectedInstance.lastConnection)}
+                  </p>
+                </div>
+                {selectedInstance.phone && (
+                  <div>
+                    <p className="text-sm text-gray-600">Telefone</p>
+                    <p className="text-sm font-medium mt-1">{selectedInstance.phone}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-gray-600">Webhook</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {selectedInstance.webhookUrl ? (
+                      <Badge variant="success">Configurado</Badge>
+                    ) : (
+                      <Badge variant="error">Não Configurado</Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </Tabs>
+
+            {/* QR Code */}
+            {qrCode && (
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium">Escaneie o QR Code</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={refreshQrCode}
+                    disabled={qrLoading}
+                  >
+                    {qrLoading ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                <img 
+                  src={qrCode} 
+                  alt="QR Code" 
+                  className="mx-auto max-w-xs border rounded"
+                />
+                <p className="text-sm text-gray-600 mt-2">
+                  Use o WhatsApp para escanear este código
+                </p>
+                <Alert type="warning" className="mt-3">
+                  <AlertCircle className="w-4 h-4" />
+                  <p className="text-sm">
+                    O QR Code expira em alguns minutos. Clique em atualizar se necessário.
+                  </p>
+                </Alert>
+              </div>
+            )}
+
+            {/* Configurações da IA */}
+            <div className="space-y-4">
+              <h3 className="font-medium">Configurações da IA</h3>
+              
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="text-sm font-medium">Ativar IA</label>
+                  <p className="text-xs text-gray-500">Respostas automáticas com inteligência artificial</p>
+                </div>
+                <Switch
+                  checked={selectedInstance.aiEnabled}
+                  onCheckedChange={(checked) => 
+                    updateInstanceConfig(selectedInstance.instanceName, { aiEnabled: checked })
+                  }
+                  disabled={configLoading}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="text-sm font-medium">Resposta Automática</label>
+                  <p className="text-xs text-gray-500">Responder automaticamente às mensagens</p>
+                </div>
+                <Switch
+                  checked={selectedInstance.autoResponse}
+                  onCheckedChange={(checked) => 
+                    updateInstanceConfig(selectedInstance.instanceName, { autoResponse: checked })
+                  }
+                  disabled={configLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Mensagem de Boas-vindas
+                </label>
+                <Textarea
+                  value={selectedInstance.welcomeMessage || ''}
+                  onChange={(e) => 
+                    updateInstanceConfig(selectedInstance.instanceName, { welcomeMessage: e.target.value })
+                  }
+                  placeholder="Mensagem enviada no primeiro contato"
+                  rows={3}
+                  disabled={configLoading}
+                />
+              </div>
+            </div>
+
+            {/* Webhook Configuration */}
+            <div className="space-y-4">
+              <h3 className="font-medium">Configuração do Webhook</h3>
+              
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <label className="block text-sm font-medium mb-2">URL do Webhook</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={`${window.location.origin}/api/rag/webhook`}
+                    readOnly
+                    className="bg-gray-100"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyWebhookUrl}
+                  >
+                    {copied ? (
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Esta URL é configurada automaticamente quando você cria uma instância
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-between pt-4">
+              <div>
+                {selectedInstance.status === 'close' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => connectInstance(selectedInstance.instanceName)}
+                    disabled={qrLoading}
+                  >
+                    {qrLoading ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <>
+                        <QrCode className="w-4 h-4 mr-2" />
+                        Gerar QR Code
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowConfigModal(false)
+                  setQrCode('')
+                  setSelectedInstance(null)
+                }}
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
         )}
       </Modal>
     </PageContainer>
