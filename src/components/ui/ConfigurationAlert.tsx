@@ -7,20 +7,27 @@ import { supabaseDataService } from '@/services/supabase-data'
 import { cn } from '@/lib/utils'
 
 interface ConfigurationAlertProps {
-  type: 'error' | 'warning' | 'success' | 'info'
-  title: string
-  message: string
+  type?: 'error' | 'warning' | 'success' | 'info'
+  title?: string
+  message?: string
+  error?: string
   className?: string
   onClose?: () => void
+  forceShow?: boolean
 }
 
-export function ConfigurationAlert({
-  type,
+export default function ConfigurationAlert({
+  type = 'error',
   title,
   message,
+  error,
   className,
-  onClose
+  onClose,
+  forceShow = false
 }: ConfigurationAlertProps) {
+  const [copied, setCopied] = useState(false)
+  const [shouldShow, setShouldShow] = useState(true)
+
   const icons = {
     error: <XCircle className="h-5 w-5 text-error-500" />,
     warning: <AlertTriangle className="h-5 w-5 text-warning-500" />,
@@ -34,42 +41,6 @@ export function ConfigurationAlert({
     success: 'bg-success-50 border-success-200 text-success-700',
     info: 'bg-info-50 border-info-200 text-info-700'
   }
-
-  return (
-    <div
-      className={cn(
-        'flex items-start gap-3 rounded-lg border p-4',
-        styles[type],
-        className
-      )}
-    >
-      <div className="flex-shrink-0">{icons[type]}</div>
-      
-      <div className="flex-1 space-y-1">
-        <h3 className="font-medium">{title}</h3>
-        <p className="text-sm opacity-90">{message}</p>
-      </div>
-
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="flex-shrink-0 rounded-full p-1 hover:bg-black/5"
-        >
-          <XCircle className="h-4 w-4 opacity-50" />
-        </button>
-      )}
-    </div>
-  )
-}
-
-interface ConfigurationAlertProps {
-  error?: string
-  forceShow?: boolean
-}
-
-export default function ConfigurationAlert({ error, forceShow = false }: ConfigurationAlertProps) {
-  const [copied, setCopied] = useState(false)
-  const [shouldShow, setShouldShow] = useState(true)
 
   // Verificar se o sistema já está configurado
   useEffect(() => {
@@ -112,7 +83,7 @@ EVOLUTION_API_KEY=your-evolution-api-key-here`
     }
   }
 
-  if (!isSupabaseError) {
+  if (!isSupabaseError && error) {
     return (
       <Alert variant="error" className="mb-6">
         <Settings className="h-4 w-4" />
@@ -121,71 +92,99 @@ EVOLUTION_API_KEY=your-evolution-api-key-here`
     )
   }
 
-  return (
-    <div className="space-y-4 mb-6">
-      <Alert variant="error">
-        <Settings className="h-4 w-4" />
-        <AlertDescription className="font-medium">
-          {error}
-        </AlertDescription>
-      </Alert>
+  if (isSupabaseError) {
+    return (
+      <div className="space-y-4 mb-6">
+        <Alert variant="error">
+          <Settings className="h-4 w-4" />
+          <AlertDescription className="font-medium">
+            {error}
+          </AlertDescription>
+        </Alert>
 
-      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-        <h3 className="font-semibold text-orange-800 mb-2">
-          🔧 Como resolver este problema:
-        </h3>
-        
-        <div className="space-y-3 text-sm text-orange-700">
-          <div>
-            <p className="font-medium">1. Criar projeto no Supabase:</p>
-            <div className="flex items-center gap-2 mt-1">
-              <a 
-                href="https://supabase.com/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-orange-600 hover:text-orange-800 underline flex items-center gap-1"
-              >
-                Acessar Supabase <ExternalLink className="h-3 w-3" />
-              </a>
-              <span>→ New Project → Copiar credenciais</span>
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <h3 className="font-semibold text-orange-800 mb-2">
+            🔧 Como resolver este problema:
+          </h3>
+          
+          <div className="space-y-3 text-sm text-orange-700">
+            <div>
+              <p className="font-medium">1. Criar projeto no Supabase:</p>
+              <div className="flex items-center gap-2 mt-1">
+                <a 
+                  href="https://supabase.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-orange-600 hover:text-orange-800 underline flex items-center gap-1"
+                >
+                  Acessar Supabase <ExternalLink className="h-3 w-3" />
+                </a>
+                <span>→ New Project → Copiar credenciais</span>
+              </div>
+            </div>
+
+            <div>
+              <p className="font-medium">2. Criar arquivo .env.local na raiz:</p>
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyEnvExample}
+                  className="text-xs bg-white border-orange-300 text-orange-700 hover:bg-orange-50"
+                >
+                  <Copy className="h-3 w-3 mr-1" />
+                  {copied ? 'Copiado!' : 'Copiar template'}
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <p className="font-medium">3. Configurar banco:</p>
+              <p>SQL Editor → Executar scripts:</p>
+              <ul className="list-disc list-inside ml-4">
+                <li>database/supabase-schema.sql</li>
+                <li>database/sample-data.sql</li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-medium">4. Reiniciar: npm run dev</p>
             </div>
           </div>
 
-          <div>
-            <p className="font-medium">2. Criar arquivo .env.local na raiz:</p>
-            <div className="mt-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={copyEnvExample}
-                className="text-xs bg-white border-orange-300 text-orange-700 hover:bg-orange-50"
-              >
-                <Copy className="h-3 w-3 mr-1" />
-                {copied ? 'Copiado!' : 'Copiar template'}
-              </Button>
-            </div>
+          <div className="mt-3 pt-3 border-t border-orange-200">
+            <p className="text-xs text-orange-600">
+              📖 Veja CONFIGURACAO.md para instruções completas
+            </p>
           </div>
-
-          <div>
-            <p className="font-medium">3. Configurar banco:</p>
-            <p>SQL Editor → Executar scripts:</p>
-            <ul className="list-disc list-inside ml-4">
-              <li>database/supabase-schema.sql</li>
-              <li>database/sample-data.sql</li>
-            </ul>
-          </div>
-
-          <div>
-            <p className="font-medium">4. Reiniciar: npm run dev</p>
-          </div>
-        </div>
-
-        <div className="mt-3 pt-3 border-t border-orange-200">
-          <p className="text-xs text-orange-600">
-            📖 Veja CONFIGURACAO.md para instruções completas
-          </p>
         </div>
       </div>
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3 rounded-lg border p-4',
+        styles[type],
+        className
+      )}
+    >
+      <div className="flex-shrink-0">{icons[type]}</div>
+      
+      <div className="flex-1 space-y-1">
+        <h3 className="font-medium">{title}</h3>
+        <p className="text-sm opacity-90">{message}</p>
+      </div>
+
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="flex-shrink-0 rounded-full p-1 hover:bg-black/5"
+        >
+          <XCircle className="h-4 w-4 opacity-50" />
+        </button>
+      )}
     </div>
   )
 } 
