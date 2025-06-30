@@ -1,9 +1,16 @@
 import axios, { AxiosInstance } from 'axios'
 import { EvolutionConfig, EvolutionInstance, WhatsAppMessage } from '@/types/rag'
+import { Supabase } from '@supabase/supabase-js'
 
 class EvolutionService {
   private client: AxiosInstance | null = null
   private config: EvolutionConfig | null = null
+  private supabase: Supabase
+
+  constructor(client: AxiosInstance | null, supabase: Supabase) {
+    this.client = client
+    this.supabase = supabase
+  }
 
   initialize(config: EvolutionConfig) {
     this.config = config
@@ -14,6 +21,26 @@ class EvolutionService {
         'apikey': config.apiKey
       }
     })
+  }
+
+  private checkInitialization() {
+    if (!this.client) {
+      throw new Error('Serviço Evolution não foi inicializado corretamente')
+    }
+  }
+
+  private handleError(error: any, customMessage: string): never {
+    console.error(`${customMessage}:`, error)
+
+    if (error.response?.data?.error) {
+      throw new Error(`${customMessage}: ${error.response.data.error}`)
+    }
+
+    if (error.message) {
+      throw new Error(`${customMessage}: ${error.message}`)
+    }
+
+    throw new Error(customMessage)
   }
 
   // Gerenciamento de Instâncias
@@ -108,42 +135,33 @@ class EvolutionService {
   }
 
   async getQRCode(instanceName: string): Promise<string> {
-    if (!this.client) {
-      throw new Error('Evolution service not initialized')
-    }
+    this.checkInitialization()
 
     try {
       const response = await this.client.get(`/instance/connect/${instanceName}`)
       return response.data.qrcode?.code || ''
     } catch (error) {
-      console.error('Erro ao obter QR Code:', error)
-      throw new Error('Falha ao obter QR Code')
+      this.handleError(error, 'Falha ao obter QR Code')
     }
   }
 
   async disconnectInstance(instanceName: string): Promise<void> {
-    if (!this.client) {
-      throw new Error('Evolution service not initialized')
-    }
+    this.checkInitialization()
 
     try {
       await this.client.delete(`/instance/logout/${instanceName}`)
     } catch (error) {
-      console.error('Erro ao desconectar instância:', error)
-      throw new Error('Falha ao desconectar instância')
+      this.handleError(error, 'Falha ao desconectar instância')
     }
   }
 
   async deleteInstance(instanceName: string): Promise<void> {
-    if (!this.client) {
-      throw new Error('Evolution service not initialized')
-    }
+    this.checkInitialization()
 
     try {
       await this.client.delete(`/instance/delete/${instanceName}`)
     } catch (error) {
-      console.error('Erro ao deletar instância:', error)
-      throw new Error('Falha ao deletar instância')
+      this.handleError(error, 'Falha ao deletar instância')
     }
   }
 
@@ -178,21 +196,37 @@ class EvolutionService {
     }
 
     try {
+      const timestamp = new Date()
       const response = await this.client.post(`/message/sendText/${instanceName}`, {
         number: phone,
-        text: message
+        text: message,
+        options: {
+          delay: 1200,
+          presence: 'composing'
+        }
       })
 
-      return {
-        id: response.data.key.id,
-        from: response.data.key.fromMe ? 'bot' : phone,
-        to: response.data.key.fromMe ? phone : 'bot',
-        body: message,
-        timestamp: new Date(),
-        type: 'text',
-        status: 'sent',
-        isFromBot: true
-      }
+      // Criar mensagem no banco de dados
+      const { data: savedMessage, error } = await this.supabase
+        .from('chat_messages')
+        .insert({
+          instance_id: instanceName,
+          phone_number: phone,
+          message: message,
+          is_bot: true,
+          metadata: {
+            messageId: response.data.key.id,
+            fromMe: true,
+            status: 'sent'
+          },
+          created_at: timestamp.toISOString()
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return savedMessage
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error)
       throw new Error('Falha ao enviar mensagem')
@@ -276,18 +310,20 @@ class EvolutionService {
   }
 
   async getContactInfo(instanceName: string, phone: string): Promise<any> {
-    if (!this.client) {
-      throw new Error('Evolution service not initialized')
-    }
+    this.checkInitialization()
 
     try {
       const response = await this.client.get(`/chat/whatsappNumbers/${instanceName}`, {
         params: { numbers: [phone] }
       })
+
+      if (!response.data?.[0]) {
+        throw new Error('Contato não encontrado')
+      }
+
       return response.data[0]
     } catch (error) {
-      console.error('Erro ao buscar info do contato:', error)
-      throw new Error('Falha ao buscar informações do contato')
+      this.handleError(error, 'Falha ao buscar informações do contato')
     }
   }
 
@@ -438,5 +474,4 @@ class EvolutionService {
   }
 }
 
-export const evolutionService = new EvolutionService()
-export default evolutionService 
+export default EvolutionService 

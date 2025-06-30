@@ -5,7 +5,8 @@ import {
   Button, 
   Input, 
   Badge, 
-  Avatar
+  Avatar,
+  Spinner
 } from '@/components/ui'
 import { useRAG } from '@/contexts/RAGContext'
 import { WhatsAppMessage } from '@/types/rag'
@@ -21,60 +22,96 @@ import {
   Archive,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  FileText,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { toast } from 'sonner'
 
-export default function ChatInterface() {
+interface Message {
+  id: string;
+  phone_number: string;
+  message: string;
+  is_bot: boolean;
+  metadata?: {
+    sources?: {
+      documents: Array<{
+        id: string;
+        similarity: number;
+      }>;
+    };
+  };
+  created_at: string;
+}
+
+interface Document {
+  id: string;
+  file_name: string;
+  content: string;
+}
+
+interface ChatInterfaceProps {
+  instanceId: string;
+  phoneNumber: string;
+}
+
+export function ChatInterface({ instanceId, phoneNumber }: ChatInterfaceProps) {
   const { 
     activeConversation, 
-    sendMessage, 
+    sendMessage: sendMessageToRAG,
     sendRAGResponse,
     isSending,
-    currentAgent
+    currentAgent,
+    refreshConversations
   } = useRAG()
 
-  const [message, setMessage] = useState('')
-  const [isRAGMode, setIsRAGMode] = useState(true)
+  const [newMessage, setNewMessage] = useState('')
+  const [expandedSources, setExpandedSources] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Atualizar mensagens periodicamente
   useEffect(() => {
-    scrollToBottom()
-  }, [activeConversation?.messages])
+    const interval = setInterval(() => {
+      refreshConversations()
+    }, 3000) // Atualizar a cada 3 segundos
 
+    return () => clearInterval(interval)
+  }, [refreshConversations])
+
+  // Atualizar quando mudar de conversa
   useEffect(() => {
-    inputRef.current?.focus()
-  }, [activeConversation])
+    refreshConversations()
+  }, [instanceId, phoneNumber])
 
-  const scrollToBottom = () => {
+  // Rolar para a última mensagem
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  }, [activeConversation?.messages])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!message.trim() || !activeConversation || isSending) return
-
-    const messageText = message.trim()
-    setMessage('')
+    if (!newMessage.trim() || isSending) return
 
     try {
-      if (isRAGMode) {
-        await sendRAGResponse(activeConversation.contact.phone, messageText)
-      } else {
-        await sendMessage(activeConversation.contact.phone, messageText)
-      }
+      await sendMessageToRAG(phoneNumber, newMessage)
+      setNewMessage('')
+      await refreshConversations()
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error)
+      console.error('Error sending message:', error)
+      toast.error('Failed to send message')
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage(e as any)
-    }
+  const toggleSource = (messageId: string) => {
+    setExpandedSources(expanded =>
+      expanded.includes(messageId)
+        ? expanded.filter(id => id !== messageId)
+        : [...expanded, messageId]
+    )
   }
 
   if (!activeConversation) {
@@ -146,171 +183,101 @@ export default function ChatInterface() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary-50">
-        {activeConversation.messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+        {activeConversation.messages.map(message => (
+          <div
+            key={message.id}
+            className={`flex ${message.is_bot ? 'justify-start' : 'justify-end'}`}
+          >
+            <div
+              className={`
+                max-w-[80%] rounded-lg p-3 space-y-2
+                ${message.is_bot
+                  ? 'bg-gray-100'
+                  : 'bg-primary text-white'
+                }
+              `}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {message.is_bot ? (
+                  <Bot className="h-4 w-4" />
+                ) : (
+                  <User className="h-4 w-4" />
+                )}
+                <span className="text-xs opacity-70">
+                  {formatDistanceToNow(new Date(message.created_at), { addSuffix: true, locale: ptBR })}
+                </span>
+              </div>
+
+              <p className="text-sm whitespace-pre-wrap">{message.message}</p>
+
+              {message.is_bot && message.metadata?.sources?.documents && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={() => toggleSource(message.id)}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    <FileText className="h-3 w-3" />
+                    {expandedSources.includes(message.id) ? (
+                      <>
+                        <span>Ocultar fontes</span>
+                        <ChevronUp className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        <span>Ver fontes ({message.metadata.sources.documents.length})</span>
+                        <ChevronDown className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+
+                  {expandedSources.includes(message.id) && (
+                    <div className="mt-2 space-y-2">
+                      {message.metadata.sources.documents.map((doc: any) => (
+                        <div key={doc.id} className="text-xs bg-white p-2 rounded border border-gray-200">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium">{doc.file_name}</span>
+                            <Badge variant="secondary" className="text-[10px]">
+                              {Math.round(doc.similarity * 100)}% relevante
+                            </Badge>
+                          </div>
+                          <p className="text-gray-600 line-clamp-2">{doc.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-secondary-200 bg-white">
-        {/* RAG Mode Toggle */}
-        <div className="flex items-center gap-2 mb-3">
-          <Button
-            variant={isRAGMode ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setIsRAGMode(true)}
-            className="text-xs"
-          >
-            <Bot className="h-3 w-3 mr-1" />
-            RAG Mode
-          </Button>
-          <Button
-            variant={!isRAGMode ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setIsRAGMode(false)}
-            className="text-xs"
-          >
-            <User className="h-3 w-3 mr-1" />
-            Manual
-          </Button>
-          {currentAgent && (
-            <Badge variant="secondary" className="text-xs ml-auto">
-              {currentAgent.name}
-            </Badge>
-          )}
-        </div>
-
-        <form onSubmit={handleSendMessage} className="flex items-end gap-2">
-          <div className="flex-1">
-            <Input
-              ref={inputRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={
-                isRAGMode 
-                  ? "Digite uma mensagem (será processada pela IA)..." 
-                  : "Digite uma mensagem manual..."
-              }
-              disabled={isSending}
-              className="resize-none"
-            />
-          </div>
-          <Button 
-            type="submit" 
-            disabled={!message.trim() || isSending}
-            size="sm"
-          >
-            {isSending ? (
-              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </form>
-
-        {isRAGMode && (
-          <p className="text-xs text-secondary-500 mt-2">
-            💡 Modo RAG ativo: Suas mensagens serão processadas pela IA usando a base de conhecimento
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-interface MessageBubbleProps {
-  message: WhatsAppMessage
-}
-
-function MessageBubble({ message }: MessageBubbleProps) {
-  const [showActions, setShowActions] = useState(false)
-
-  const getStatusIcon = (status: WhatsAppMessage['status']) => {
-    switch (status) {
-      case 'sent':
-        return <Clock className="h-3 w-3 text-secondary-400" />
-      case 'delivered':
-        return <CheckCircle className="h-3 w-3 text-secondary-400" />
-      case 'read':
-        return <CheckCircle className="h-3 w-3 text-blue-500" />
-      case 'failed':
-        return <AlertCircle className="h-3 w-3 text-error-500" />
-      default:
-        return null
-    }
-  }
-
-  const copyMessage = () => {
-    navigator.clipboard.writeText(message.body)
-  }
-
-  const isFromBot = message.isFromBot
-  const isOutgoing = !isFromBot
-
-  return (
-    <div 
-      className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'} group`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-    >
-      <div className={`max-w-[70%] ${isOutgoing ? 'order-2' : 'order-1'}`}>
-        <div
-          className={`rounded-2xl px-4 py-2 ${
-            isOutgoing
-              ? 'bg-primary-500 text-white rounded-br-md'
-              : isFromBot
-              ? 'bg-blue-100 text-blue-900 rounded-bl-md border border-blue-200'
-              : 'bg-white text-secondary-900 rounded-bl-md border border-secondary-200'
-          }`}
+      <form onSubmit={handleSendMessage} className="flex items-center gap-2 p-4 border-t border-secondary-200 bg-white">
+        <Input
+          ref={inputRef}
+          type="text"
+          placeholder="Digite sua mensagem..."
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          disabled={isSending}
+        />
+        <Button 
+          type="submit"
+          variant="primary"
+          disabled={isSending || !newMessage.trim()}
         >
-          {isFromBot && (
-            <div className="flex items-center gap-1 mb-1">
-              <Bot className="h-3 w-3 text-blue-600" />
-              <span className="text-xs font-medium text-blue-600">RAG Bot</span>
+          {isSending ? (
+            <div className="flex items-center gap-2">
+              <Spinner size="sm" />
+              <span>Enviando...</span>
             </div>
+          ) : (
+            <Send className="h-4 w-4" />
           )}
-          
-          <p className="text-sm whitespace-pre-wrap break-words">
-            {message.body}
-          </p>
-          
-          {message.metadata?.fileName && (
-            <div className="mt-2 p-2 bg-black/10 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Download className="h-4 w-4" />
-                <span className="text-xs">{message.metadata.fileName}</span>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        <div className={`flex items-center gap-1 mt-1 text-xs text-secondary-500 ${
-          isOutgoing ? 'justify-end' : 'justify-start'
-        }`}>
-          <span>
-            {format(message.timestamp, 'HH:mm', { locale: ptBR })}
-          </span>
-          {isOutgoing && getStatusIcon(message.status)}
-        </div>
-      </div>
-
-      {/* Message Actions */}
-      {showActions && (
-        <div className={`flex items-center gap-1 ${
-          isOutgoing ? 'order-1 mr-2' : 'order-2 ml-2'
-        }`}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={copyMessage}
-            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Copy className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
+        </Button>
+      </form>
     </div>
   )
 } 

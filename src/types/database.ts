@@ -4,6 +4,14 @@
 // Tipos TypeScript gerados a partir do schema Supabase
 // ============================================================================
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
 export interface Database {
   public: {
     Tables: {
@@ -370,49 +378,34 @@ export interface Database {
       evolution_instances: {
         Row: {
           id: string;
-          instance_name: string;
-          ai_enabled: boolean;
-          auto_response: boolean;
-          welcome_message: string;
-          status: 'open' | 'close' | 'connecting';
-          webhook_configured: boolean;
+          name: string;
+          description: string | null;
+          status: string;
+          qr_code: string | null;
           webhook_url: string | null;
-          api_key: string | null;
-          phone: string | null;
-          profile_picture_url: string | null;
-          last_connection: string | null;
+          user_id: string;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          instance_name: string;
-          ai_enabled?: boolean;
-          auto_response?: boolean;
-          welcome_message?: string;
-          status?: 'open' | 'close' | 'connecting';
-          webhook_configured?: boolean;
+          name: string;
+          description?: string | null;
+          status?: string;
+          qr_code?: string | null;
           webhook_url?: string | null;
-          api_key?: string | null;
-          phone?: string | null;
-          profile_picture_url?: string | null;
-          last_connection?: string | null;
+          user_id: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          instance_name?: string;
-          ai_enabled?: boolean;
-          auto_response?: boolean;
-          welcome_message?: string;
-          status?: 'open' | 'close' | 'connecting';
-          webhook_configured?: boolean;
+          name?: string;
+          description?: string | null;
+          status?: string;
+          qr_code?: string | null;
           webhook_url?: string | null;
-          api_key?: string | null;
-          phone?: string | null;
-          profile_picture_url?: string | null;
-          last_connection?: string | null;
+          user_id?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -519,39 +512,100 @@ export interface Database {
       ai_configurations: {
         Row: {
           id: string;
-          name: string;
-          provider: string;
+          instance_id: string;
           model: string;
-          api_key: string;
-          settings: Record<string, any>;
+          temperature: number;
+          max_tokens: number;
+          system_prompt: string | null;
           is_active: boolean;
-          created_by: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          name: string;
-          provider: string;
-          model: string;
-          api_key: string;
-          settings?: Record<string, any>;
+          instance_id: string;
+          model?: string;
+          temperature?: number;
+          max_tokens?: number;
+          system_prompt?: string | null;
           is_active?: boolean;
-          created_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          name?: string;
-          provider?: string;
+          instance_id?: string;
           model?: string;
-          api_key?: string;
-          settings?: Record<string, any>;
+          temperature?: number;
+          max_tokens?: number;
+          system_prompt?: string | null;
           is_active?: boolean;
-          created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      rag_documents: {
+        Row: {
+          id: string;
+          instance_id: string;
+          file_name: string;
+          file_path: string;
+          content: string | null;
+          content_vector: number[] | null;
+          metadata: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          instance_id: string;
+          file_name: string;
+          file_path: string;
+          content?: string | null;
+          content_vector?: number[] | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          instance_id?: string;
+          file_name?: string;
+          file_path?: string;
+          content?: string | null;
+          content_vector?: number[] | null;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          instance_id: string;
+          phone_number: string;
+          message: string;
+          is_bot: boolean;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          instance_id: string;
+          phone_number: string;
+          message: string;
+          is_bot?: boolean;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          instance_id?: string;
+          phone_number?: string;
+          message?: string;
+          is_bot?: boolean;
+          metadata?: Json | null;
+          created_at?: string;
         };
       };
     };

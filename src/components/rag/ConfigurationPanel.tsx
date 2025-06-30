@@ -20,9 +20,25 @@ import {
 import ConfigurationAlert from '@/components/ui/ConfigurationAlert'
 import { useRAG } from '@/contexts/RAGContext'
 import { OpenAIConfig, EvolutionConfig } from '@/types/rag'
-import { Key, Bot, Zap, CheckCircle, Settings } from 'lucide-react'
+import { Key, Bot, Zap, CheckCircle, Settings, MessageSquare, Database, AlertCircle } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
+import { DocumentManager } from './DocumentManager'
+import { ChatInterface } from './ChatInterface'
+import { Switch } from '@/components/ui/Switch'
+import { Slider } from '@/components/ui/Slider'
+import { toast } from 'sonner'
 
-export default function ConfigurationPanel() {
+interface ConfigurationPanelProps {
+  instanceId: string
+}
+
+interface RAGSettings {
+  is_active: boolean
+  similarity_threshold: number
+  max_sources: number
+}
+
+export function ConfigurationPanel({ instanceId }: ConfigurationPanelProps) {
   const { 
     configureOpenAI, 
     configureEvolution, 
@@ -63,6 +79,12 @@ Diretrizes:
   const [isLoading, setIsLoading] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
   const [showConfiguration, setShowConfiguration] = useState(false)
+  const [settings, setSettings] = useState<RAGSettings>({
+    is_active: true,
+    similarity_threshold: 0.7,
+    max_sources: 3
+  })
+  const [selectedPhone, setSelectedPhone] = useState<string>('')
 
   // Carregar configurações existentes se disponíveis
   useEffect(() => {
@@ -176,6 +198,29 @@ Diretrizes:
     }
   }
 
+  const updateSettings = async (newSettings: Partial<RAGSettings>) => {
+    try {
+      const response = await fetch(`/api/instances/${instanceId}/rag/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...settings,
+          ...newSettings
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to update settings')
+
+      setSettings(current => ({ ...current, ...newSettings }))
+      toast.success('Settings updated successfully')
+    } catch (error) {
+      console.error('Error updating settings:', error)
+      toast.error('Failed to update settings')
+    }
+  }
+
   if (isConfigured && !showConfiguration) {
     return (
       <div className="space-y-6">
@@ -265,21 +310,129 @@ Diretrizes:
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <OpenAIConfigCard 
-          config={openAIConfig}
-          setConfig={setOpenAIConfig}
-          onSubmit={handleOpenAISubmit}
-          isLoading={isLoading}
-        />
-        
-        <EvolutionConfigCard 
-          config={evolutionConfig}
-          setConfig={setEvolutionConfig}
-          onSubmit={handleEvolutionSubmit}
-          isLoading={isLoading}
-        />
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Knowledge Base Configuration</h2>
+          <p className="text-gray-500">
+            Manage your RAG system settings and documents
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-600">Enable RAG</span>
+          <Switch
+            checked={settings.is_active}
+            onCheckedChange={(checked) => updateSettings({ is_active: checked })}
+          />
+        </div>
       </div>
+
+      {!settings.is_active && (
+        <div className="flex items-center gap-2 p-4 bg-yellow-50 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-yellow-500" />
+          <p className="text-sm text-yellow-700">
+            RAG system is currently disabled. Enable it to use AI responses with context from your knowledge base.
+          </p>
+        </div>
+      )}
+
+      <Tabs defaultValue="documents" className="w-full">
+        <TabsList>
+          <TabsTrigger value="documents" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            Documents
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Chat Test
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Settings
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="documents" className="mt-6">
+          <DocumentManager instanceId={instanceId} />
+        </TabsContent>
+
+        <TabsContent value="chat" className="mt-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Test Phone Number
+              </label>
+              <input
+                type="text"
+                value={selectedPhone}
+                onChange={(e) => setSelectedPhone(e.target.value)}
+                placeholder="Enter phone number (e.g., +1234567890)"
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+
+            {selectedPhone && (
+              <ChatInterface
+                instanceId={instanceId}
+                phoneNumber={selectedPhone}
+              />
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-6">
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-4">
+                Similarity Threshold ({(settings.similarity_threshold * 100).toFixed(0)}%)
+              </label>
+              <Slider
+                value={[settings.similarity_threshold * 100]}
+                onValueChange={([value]) =>
+                  updateSettings({ similarity_threshold: value / 100 })
+                }
+                min={0}
+                max={100}
+                step={1}
+                className="w-full"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Higher values require closer matches between queries and documents
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-4">
+                Maximum Sources ({settings.max_sources})
+              </label>
+              <Slider
+                value={[settings.max_sources]}
+                onValueChange={([value]) =>
+                  updateSettings({ max_sources: value })
+                }
+                min={1}
+                max={10}
+                step={1}
+                className="w-full"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Maximum number of relevant documents to include in responses
+              </p>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">
+                Performance Impact
+              </h3>
+              <p className="text-sm text-gray-600">
+                Higher similarity thresholds and more sources may improve response quality
+                but can increase processing time and costs. Adjust these settings based on
+                your needs and performance requirements.
+              </p>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {testResult && (
         <Alert variant={testResult.includes('✅') ? 'success' : 'error'}>

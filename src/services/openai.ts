@@ -5,12 +5,39 @@ class OpenAIService {
   private client: OpenAI | null = null
   private config: OpenAIConfig | null = null
 
-  initialize(config: OpenAIConfig) {
-    this.config = config
-    this.client = new OpenAI({
-      apiKey: config.apiKey,
-      dangerouslyAllowBrowser: true // Para uso no cliente - em produção usar API routes
-    })
+  constructor(apiKey?: string) {
+    if (apiKey) {
+      this.initialize(apiKey)
+    }
+  }
+
+  initialize(apiKey: string) {
+    try {
+      this.client = new OpenAI({ apiKey })
+    } catch (error) {
+      console.error('Erro ao inicializar OpenAI:', error)
+      throw new Error('Falha ao inicializar serviço OpenAI. Verifique sua chave API.')
+    }
+  }
+
+  private checkInitialization() {
+    if (!this.client) {
+      throw new Error('Serviço OpenAI não foi inicializado. Verifique sua chave API.')
+    }
+  }
+
+  private handleError(error: any, customMessage: string): never {
+    console.error(`${customMessage}:`, error)
+
+    if (error.response?.data?.error) {
+      throw new Error(`${customMessage}: ${error.response.data.error}`)
+    }
+
+    if (error.message) {
+      throw new Error(`${customMessage}: ${error.message}`)
+    }
+
+    throw new Error(customMessage)
   }
 
   async generateResponse(
@@ -62,9 +89,7 @@ class OpenAIService {
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.client) {
-      throw new Error('OpenAI service not initialized')
-    }
+    this.checkInitialization()
 
     try {
       const response = await this.client.embeddings.create({
@@ -72,10 +97,13 @@ class OpenAIService {
         input: text
       })
 
+      if (!response.data?.[0]?.embedding) {
+        throw new Error('Resposta inválida do serviço de embeddings')
+      }
+
       return response.data[0].embedding
     } catch (error) {
-      console.error('Erro ao gerar embedding:', error)
-      throw new Error('Falha ao gerar embedding')
+      this.handleError(error, 'Falha ao gerar embedding')
     }
   }
 

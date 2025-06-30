@@ -1,9 +1,66 @@
 'use client'
 
 import { Alert, AlertDescription, Button } from '@/components/ui'
-import { Settings, ExternalLink, Copy } from 'lucide-react'
+import { Settings, ExternalLink, Copy, AlertCircle, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabaseDataService } from '@/services/supabase-data'
+import { cn } from '@/lib/utils'
+
+interface ConfigurationAlertProps {
+  type: 'error' | 'warning' | 'success' | 'info'
+  title: string
+  message: string
+  className?: string
+  onClose?: () => void
+}
+
+export function ConfigurationAlert({
+  type,
+  title,
+  message,
+  className,
+  onClose
+}: ConfigurationAlertProps) {
+  const icons = {
+    error: <XCircle className="h-5 w-5 text-error-500" />,
+    warning: <AlertTriangle className="h-5 w-5 text-warning-500" />,
+    success: <CheckCircle className="h-5 w-5 text-success-500" />,
+    info: <AlertCircle className="h-5 w-5 text-info-500" />
+  }
+
+  const styles = {
+    error: 'bg-error-50 border-error-200 text-error-700',
+    warning: 'bg-warning-50 border-warning-200 text-warning-700',
+    success: 'bg-success-50 border-success-200 text-success-700',
+    info: 'bg-info-50 border-info-200 text-info-700'
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3 rounded-lg border p-4',
+        styles[type],
+        className
+      )}
+    >
+      <div className="flex-shrink-0">{icons[type]}</div>
+      
+      <div className="flex-1 space-y-1">
+        <h3 className="font-medium">{title}</h3>
+        <p className="text-sm opacity-90">{message}</p>
+      </div>
+
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="flex-shrink-0 rounded-full p-1 hover:bg-black/5"
+        >
+          <XCircle className="h-4 w-4 opacity-50" />
+        </button>
+      )}
+    </div>
+  )
+}
 
 interface ConfigurationAlertProps {
   error?: string

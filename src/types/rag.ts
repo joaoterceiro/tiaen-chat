@@ -1,18 +1,23 @@
 // Tipos para o sistema RAG
 export interface WhatsAppMessage {
   id: string
-  from: string
-  to: string
-  body: string
-  timestamp: Date
-  type: 'text' | 'image' | 'audio' | 'video' | 'document'
-  status: 'sent' | 'delivered' | 'read' | 'failed'
-  isFromBot: boolean
+  phone_number: string
+  message: string
+  is_bot: boolean
   metadata?: {
-    fileName?: string
-    mimeType?: string
-    caption?: string
+    sources?: {
+      documents: Array<{
+        id: string;
+        similarity: number;
+        file_name?: string;
+        content?: string;
+      }>;
+    };
+    messageId?: string;
+    fromMe?: boolean;
+    status?: 'sent' | 'delivered' | 'read' | 'failed';
   }
+  created_at: string
 }
 
 export interface Contact {

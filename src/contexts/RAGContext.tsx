@@ -16,6 +16,8 @@ import {
 import { openAIService } from '@/services/openai'
 import { evolutionService } from '@/services/evolution'
 import { supabaseDataService } from '@/services/supabase-data'
+import { supabase } from '@/lib/supabase'
+import { toast } from 'sonner'
 
 interface RAGState {
   // Configurações
@@ -285,6 +287,65 @@ const RAGContext = createContext<RAGContextType | undefined>(undefined)
 export function RAGProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(ragReducer, initialState)
 
+  const handleError = (error: any, defaultMessage: string) => {
+    console.error(defaultMessage, error)
+    let errorMessage = defaultMessage
+
+    if (error instanceof Error) {
+      if (error.message.includes('fetch')) {
+        errorMessage = '🔌 Erro de conexão com o servidor. Verifique sua conexão com a internet.'
+      } else if (error.message.includes('Supabase')) {
+        errorMessage = '🔑 Erro de autenticação com Supabase. Verifique suas credenciais.'
+      } else if (error.message.includes('OpenAI')) {
+        errorMessage = '🤖 Erro no serviço OpenAI. Verifique sua chave API.'
+      } else {
+        errorMessage = `❌ ${error.message}`
+      }
+    }
+
+    dispatch({ type: 'SET_ERROR', payload: errorMessage })
+    toast.error(errorMessage)
+  }
+
+  const clearError = () => {
+    dispatch({ type: 'SET_ERROR', payload: null })
+  }
+
+  // Configurar Realtime subscription
+  useEffect(() => {
+    const channel = supabase.channel('chat_messages')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'chat_messages'
+      }, (payload) => {
+        console.log('Nova mensagem recebida:', payload)
+        
+        // Atualizar estado quando receber nova mensagem
+        if (payload.eventType === 'INSERT') {
+          const message = payload.new as WhatsAppMessage
+          const conversation = state.conversations.find(c => 
+            c.contact.phone === message.phone_number
+          )
+          
+          if (conversation) {
+            dispatch({ 
+              type: 'ADD_MESSAGE', 
+              payload: { 
+                conversationId: conversation.id, 
+                message 
+              } 
+            })
+          }
+        }
+      })
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [state.conversations])
+
   // Configuração
   const configureOpenAI = async (config: OpenAIConfig) => {
     try {
@@ -310,7 +371,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       
       checkConfiguration()
     } catch (error) {
-      console.error('Erro ao salvar configuração OpenAI:', error)
+      handleError(error, 'Erro ao salvar configuração OpenAI')
       // Continuar mesmo se falhar ao salvar no Supabase
       checkConfiguration()
     }
@@ -336,7 +397,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       await supabaseDataService.setSystemSetting('system_configured', 'true')
       
     } catch (error) {
-      console.error('Erro ao salvar configuração Evolution:', error)
+      handleError(error, 'Erro ao salvar configuração Evolution')
       // Continuar mesmo se falhar ao salvar no Supabase
     }
   }
@@ -384,7 +445,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('Erro ao verificar configuração:', error)
+      handleError(error, 'Erro ao verificar configuração')
       // Em caso de erro, usar configurações locais
       const hasOpenAI = state.openAIConfig?.apiKey
       const hasEvolution = state.evolutionConfig?.baseUrl && state.evolutionConfig?.apiKey
@@ -399,7 +460,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       const instance = await evolutionService.createInstance(name)
       dispatch({ type: 'ADD_INSTANCE', payload: instance })
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Erro desconhecido' })
+      handleError(error, 'Erro ao criar instância')
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
@@ -415,7 +476,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_INSTANCE', payload: { ...instance, qrCode, status: 'connecting' } })
       }
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Erro ao conectar' })
+      handleError(error, 'Erro ao conectar instância')
     } finally {
       dispatch({ type: 'SET_CONNECTING', payload: false })
     }
@@ -429,7 +490,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_INSTANCE', payload: { ...instance, status: 'disconnected', qrCode: undefined } })
       }
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Erro ao desconectar' })
+      handleError(error, 'Erro ao desconectar instância')
     }
   }
 
@@ -452,8 +513,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       
       dispatch({ type: 'SET_INSTANCES', payload: convertedInstances })
     } catch (error) {
-      console.error('Erro ao buscar instâncias:', error)
-      dispatch({ type: 'SET_ERROR', payload: 'Erro ao carregar instâncias' })
+      handleError(error, 'Erro ao buscar instâncias')
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
@@ -502,8 +562,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_CONTACTS', payload: contacts })
       
     } catch (error) {
-      console.error('Erro ao buscar conversas:', error)
-      dispatch({ type: 'SET_ERROR', payload: 'Erro ao carregar conversas' })
+      handleError(error, 'Erro ao buscar conversas')
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
@@ -512,7 +571,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
   // Mensagens
   const sendMessage = async (phone: string, message: string) => {
     if (!state.activeInstance) {
-      dispatch({ type: 'SET_ERROR', payload: 'Nenhuma instância ativa' })
+      handleError(null, 'Nenhuma instância ativa')
       return
     }
 
@@ -524,29 +583,36 @@ export function RAGProvider({ children }: { children: ReactNode }) {
         evolutionService.initialize(state.evolutionConfig)
       }
       
+      // Enviar mensagem
       const sentMessage = await evolutionService.sendTextMessage(state.activeInstance.name, phone, message)
       
-      // Salvar mensagem no banco de dados
-      const conversation = state.conversations.find(c => c.contact.phone === phone)
-      if (conversation) {
-        const savedMessage = await supabaseDataService.createMessage({
-          conversation_id: conversation.id,
-          from_phone: null, // Bot não tem phone
-          to_phone: phone,
-          body: message,
-          message_type: 'text',
-          is_from_bot: true,
-          status: 'sent',
-          metadata: {},
-          timestamp: sentMessage.timestamp
+      // Atualizar estado local
+      if (state.activeConversation) {
+        dispatch({ 
+          type: 'ADD_MESSAGE', 
+          payload: { 
+            conversationId: state.activeConversation.id, 
+            message: {
+              id: sentMessage.id,
+              phone_number: phone,
+              message: message,
+              is_bot: true,
+              metadata: {
+                messageId: sentMessage.id,
+                fromMe: true,
+                status: 'sent'
+              },
+              created_at: new Date().toISOString()
+            }
+          } 
         })
-        
-        // Adicionar mensagem ao estado local
-        dispatch({ type: 'ADD_MESSAGE', payload: { conversationId: conversation.id, message: sentMessage } })
       }
+
+      // Atualizar conversa
+      await refreshConversations()
+      
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error)
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Erro ao enviar mensagem' })
+      handleError(error, 'Erro ao enviar mensagem')
     } finally {
       dispatch({ type: 'SET_SENDING', payload: false })
     }
@@ -554,7 +620,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
 
   const sendRAGResponse = async (phone: string, userMessage: string) => {
     if (!state.activeInstance) {
-      dispatch({ type: 'SET_ERROR', payload: 'Nenhuma instância ativa' })
+      handleError(null, 'Nenhuma instância ativa')
       return
     }
 
@@ -571,8 +637,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       await sendMessage(phone, ragResponse.answer)
       
     } catch (error) {
-      console.error('Erro ao gerar resposta RAG:', error)
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Erro ao gerar resposta RAG' })
+      handleError(error, 'Erro ao gerar resposta RAG')
     } finally {
       dispatch({ type: 'SET_SENDING', payload: false })
     }
@@ -653,14 +718,13 @@ export function RAGProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           // Ignorar erro se mensagem já existe (constraint violation)
           if (error instanceof Error && !error.message.includes('duplicate')) {
-            console.error('Erro ao salvar mensagem:', error)
+            handleError(error, 'Erro ao salvar mensagem')
           }
         }
       }
       
     } catch (error) {
-      console.error('Erro ao carregar mensagens do WhatsApp:', error)
-      dispatch({ type: 'SET_ERROR', payload: 'Erro ao carregar mensagens do WhatsApp' })
+      handleError(error, 'Erro ao carregar mensagens do WhatsApp')
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
@@ -706,8 +770,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'ADD_KNOWLEDGE', payload: convertedKnowledge })
       
     } catch (error) {
-      console.error('Erro ao adicionar conhecimento:', error)
-      dispatch({ type: 'SET_ERROR', payload: 'Erro ao adicionar conhecimento' })
+      handleError(error, 'Erro ao adicionar conhecimento')
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
@@ -741,8 +804,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'UPDATE_KNOWLEDGE', payload: convertedKnowledge })
       
     } catch (error) {
-      console.error('Erro ao atualizar conhecimento:', error)
-      dispatch({ type: 'SET_ERROR', payload: 'Erro ao atualizar conhecimento' })
+      handleError(error, 'Erro ao atualizar conhecimento')
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
@@ -753,8 +815,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       await supabaseDataService.deleteKnowledge(id)
       dispatch({ type: 'DELETE_KNOWLEDGE', payload: id })
     } catch (error) {
-      console.error('Erro ao excluir conhecimento:', error)
-      dispatch({ type: 'SET_ERROR', payload: 'Erro ao excluir conhecimento' })
+      handleError(error, 'Erro ao excluir conhecimento')
     }
   }
 
@@ -785,24 +846,17 @@ export function RAGProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_AUTOMATION_RULE', payload: id })
   }
 
-  // Utilitários
-  const clearError = () => {
-    dispatch({ type: 'SET_ERROR', payload: null })
-  }
-
   // Carregar dados iniciais
   useEffect(() => {
     const loadInitialData = async () => {
+      dispatch({ type: 'SET_LOADING', payload: true })
       try {
         // Verificar se as variáveis de ambiente estão configuradas
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
         const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
         
         if (!supabaseUrl || !supabaseKey) {
-          dispatch({ 
-            type: 'SET_ERROR', 
-            payload: '⚠️ Configuração do Supabase não encontrada! Verifique o arquivo .env.local com as credenciais do Supabase. Consulte CONFIGURACAO.md para instruções.' 
-          })
+          handleError(null, '⚠️ Configuração do Supabase não encontrada! Verifique o arquivo .env.local com as credenciais do Supabase. Consulte CONFIGURACAO.md para instruções.')
           return
         }
 
@@ -819,11 +873,9 @@ export function RAGProvider({ children }: { children: ReactNode }) {
           ])
         }
       } catch (error) {
-        console.error('Erro ao carregar dados iniciais:', error)
-        dispatch({ 
-          type: 'SET_ERROR', 
-          payload: 'Erro ao carregar configurações. Por favor, configure o sistema novamente.' 
-        })
+        handleError(error, 'Erro ao carregar dados iniciais')
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false })
       }
     }
 
@@ -869,7 +921,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       }
       
     } catch (error) {
-      console.error('Erro ao carregar configurações do Supabase:', error)
+      handleError(error, 'Erro ao carregar configurações do Supabase')
       // Não disparar erro aqui, pois pode ser que as configurações ainda não existam
     }
   }
@@ -892,7 +944,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       
       dispatch({ type: 'SET_KNOWLEDGE_BASE', payload: convertedKnowledge })
     } catch (error) {
-      console.error('Erro ao carregar base de conhecimento:', error)
+      handleError(error, 'Erro ao carregar base de conhecimento')
     }
   }
 
@@ -915,7 +967,7 @@ export function RAGProvider({ children }: { children: ReactNode }) {
       
       dispatch({ type: 'SET_AUTOMATION_RULES', payload: convertedRules })
     } catch (error) {
-      console.error('Erro ao carregar regras de automação:', error)
+      handleError(error, 'Erro ao carregar regras de automação')
     }
   }
 
