@@ -474,4 +474,8 @@ class EvolutionService {
   }
 }
 
-export default EvolutionService 
+// Criar e exportar uma instância do serviço
+export const evolutionService = new EvolutionService(null, null)
+
+// Exportar a classe também para casos específicos
+export { EvolutionService } 

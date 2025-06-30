@@ -58,7 +58,7 @@ interface ChatInterfaceProps {
   phoneNumber: string;
 }
 
-export function ChatInterface({ instanceId, phoneNumber }: ChatInterfaceProps) {
+export default function ChatInterface({ instanceId, phoneNumber }: ChatInterfaceProps) {
   const { 
     activeConversation, 
     sendMessage: sendMessageToRAG,

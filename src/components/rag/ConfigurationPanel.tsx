@@ -38,7 +38,7 @@ interface RAGSettings {
   max_sources: number
 }
 
-export function ConfigurationPanel({ instanceId }: ConfigurationPanelProps) {
+export default function ConfigurationPanel({ instanceId }: ConfigurationPanelProps) {
   const { 
     configureOpenAI, 
     configureEvolution, 

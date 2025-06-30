@@ -20,13 +20,15 @@ import { RAGProvider, useRAG } from '@/contexts/RAGContext'
 import { MessageSquare, Bot, Settings, BarChart3, Users, Brain, Zap, Phone, ArrowLeft } from 'lucide-react'
 
 // Componentes internos
-import ConversationsPanel from '@/components/rag/ConversationsPanel'
-import ChatInterface from '@/components/rag/ChatInterface'
-import ConfigurationPanel from '@/components/rag/ConfigurationPanel'
-import KnowledgeBasePanel from '@/components/rag/KnowledgeBasePanel'
-import AnalyticsPanel from '@/components/rag/AnalyticsPanel'
-import InstancesPanel from '@/components/rag/InstancesPanel'
-import AutomationPanel from '@/components/rag/AutomationPanel'
+import {
+  ConversationsPanel,
+  ChatInterface,
+  ConfigurationPanel,
+  KnowledgeBasePanel,
+  AnalyticsPanel,
+  InstancesPanel,
+  AutomationPanel
+} from '@/components/rag'
 
 function RAGDashboard() {
   const { 
